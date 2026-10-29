@@ -1,0 +1,172 @@
+{% comment %}
+Espera: form, editando, titulo, url_cancel, tx_type, formas_cartao, tem_cartoes
+        (e `lancamento` quando editando)
+{% endcomment %}
+
+<div class="max-w-lg animate-fade-in">
+    <h1 class="font-serif text-3xl font-bold mb-1">{% if editando %}Editar{% else %}Novo{% endif %} {{ titulo }}</h1>
+    <p class="text-muted text-sm mb-8">Preencha os dados do lançamento.</p>
+
+    {% if editando and lancamento.installment_plan %}
+    <div class="rounded-lg border border-borderdark bg-card px-4 py-3 text-sm text-muted mb-4">
+        Esta é a parcela <span class="text-fg font-medium">{{ lancamento.installment_label }}</span> de
+        "{{ lancamento.installment_plan.description|default:'parcelamento' }}". As mudanças valem só para ela —
+        <a href="{% url 'installment_plan_update' lancamento.installment_plan.pk %}" class="text-neon hover:underline">editar o parcelamento inteiro</a>.
+    </div>
+    {% elif editando and lancamento.recurrence %}
+    <div class="rounded-lg border border-borderdark bg-card px-4 py-3 text-sm text-muted mb-4">
+        Este lançamento foi gerado por um fixo mensal. As mudanças valem só para este mês —
+        <a href="{% url 'recurrence_update' lancamento.recurrence.pk %}" class="text-neon hover:underline">editar o fixo</a>.
+    </div>
+    {% endif %}
+
+    <form method="post" class="bg-card border border-borderdark rounded-2xl p-6 sm:p-8 space-y-5" id="form-lancamento">
+        {% csrf_token %}
+        {% for erro in form.non_field_errors %}<p class="text-red-400 text-sm">{{ erro }}</p>{% endfor %}
+
+        {% if form.kind %}
+        <div>
+            <span class="block text-sm text-muted mb-1.5">{{ form.kind.label }}</span>
+            <div class="grid grid-cols-{{ form.kind.field.choices|length }} gap-2">
+                {% for radio in form.kind %}
+                <div class="opcao-modalidade relative">
+                    {{ radio.tag }}
+                    <label for="{{ radio.id_for_label }}">{{ radio.choice_label }}</label>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-2 gap-4">
+            <div class="col-span-2" id="campo-valor">
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.value.id_for_label }}" id="rotulo-valor">{{ form.value.label }}</label>
+                {{ form.value }}
+                {% for erro in form.value.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+            {% if form.installments %}
+            <div class="hidden" id="campo-parcelas">
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.installments.id_for_label }}">{{ form.installments.label }}</label>
+                {{ form.installments }}
+                {% for erro in form.installments.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+            {% endif %}
+        </div>
+        <p class="hidden -mt-2 text-xs text-neon" id="resumo-parcelas"></p>
+
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+            {{ form.description }}
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            {% if form.category %}
+            <div>
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.category.id_for_label }}">{{ form.category.label }}</label>
+                {{ form.category }}
+            </div>
+            {% endif %}
+            {% if form.income_type %}
+            <div>
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.income_type.id_for_label }}">{{ form.income_type.label }}</label>
+                {{ form.income_type }}
+                <a href="{% url 'settings' 'entradas' %}" class="inline-block text-[11px] text-muted hover:text-fg mt-1">Gerenciar tipos →</a>
+            </div>
+            {% endif %}
+            <div>
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.date.id_for_label }}" id="rotulo-data">{{ form.date.label }}</label>
+                {{ form.date }}
+                {% for erro in form.date.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+        </div>
+
+        {% if form.end_date %}
+        <div class="hidden" id="campo-fim">
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.end_date.id_for_label }}">{{ form.end_date.label }}</label>
+            {{ form.end_date }}
+            <p class="text-[11px] text-muted mt-1">{{ form.end_date.help_text }}</p>
+            {% for erro in form.end_date.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        {% if form.payment_method %}
+        <div class="grid grid-cols-2 gap-4">
+            <div class="col-span-2" id="campo-forma">
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.payment_method.id_for_label }}">{{ form.payment_method.label }}</label>
+                {{ form.payment_method }}
+                <a href="{% url 'settings' 'pagamento' %}" class="inline-block text-[11px] text-muted hover:text-fg mt-1">Gerenciar formas →</a>
+            </div>
+            <div class="hidden" id="campo-cartao">
+                <label class="block text-sm text-muted mb-1.5" for="{{ form.card.id_for_label }}">{{ form.card.label }}</label>
+                {% if tem_cartoes %}
+                    {{ form.card }}
+                {% else %}
+                    <p class="text-xs text-muted py-2.5">Nenhum cartão cadastrado. <a href="{% url 'settings_create' 'cartoes' %}" class="text-neon hover:underline">Cadastrar cartão</a></p>
+                {% endif %}
+                {% for erro in form.card.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="flex items-center gap-3 pt-2">
+            <button type="submit" class="bg-fg text-bg text-sm font-medium rounded-lg px-6 py-2.5 hover:bg-neon transition">
+                Salvar
+            </button>
+            <a href="{% url url_cancel %}" class="border border-borderdark text-sm text-fg rounded-lg px-6 py-2.5 hover:border-fg transition">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+
+{{ formas_cartao|json_script:"formas-cartao" }}
+<script>
+(function () {
+    const form = document.getElementById('form-lancamento');
+    const formasCartao = JSON.parse(document.getElementById('formas-cartao').textContent).map(String);
+    const $ = (id) => document.getElementById(id);
+    const mostrar = (el, sim) => el && el.classList.toggle('hidden', !sim);
+
+    function modalidade() {
+        const marcado = form.querySelector('input[name="kind"]:checked');
+        return marcado ? marcado.value : null;
+    }
+
+    function atualizar() {
+        const kind = modalidade();
+        if (kind) {
+            const parcelado = kind === 'parcelado', fixo = kind === 'fixo';
+            mostrar($('campo-parcelas'), parcelado);
+            $('campo-valor').classList.toggle('col-span-2', !parcelado);
+            mostrar($('campo-fim'), fixo);
+            $('rotulo-valor').textContent = parcelado ? 'Valor total da compra (R$)' : fixo ? 'Valor mensal (R$)' : 'Valor (R$)';
+            $('rotulo-data').textContent = parcelado ? 'Data da 1ª parcela' : fixo ? 'Primeiro mês (dia que repete)' : 'Data';
+            atualizarResumo(parcelado);
+        }
+
+        const forma = form.querySelector('[data-payment-method]');
+        if (forma) {
+            const cartao = formasCartao.includes(forma.value);
+            mostrar($('campo-cartao'), cartao);
+            $('campo-forma').classList.toggle('col-span-2', !cartao);
+        }
+    }
+
+    function atualizarResumo(parcelado) {
+        const resumo = $('resumo-parcelas');
+        const total = parseFloat(($('{{ form.value.auto_id }}') || {}).value);
+        const n = parseInt((form.querySelector('[name="installments"]') || {}).value);
+        if (parcelado && total > 0 && n >= 2) {
+            const parcela = (total / n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            resumo.textContent = `${n}x de ${parcela} — uma parcela por mês, a partir da data escolhida.`;
+            mostrar(resumo, true);
+        } else {
+            mostrar(resumo, false);
+        }
+    }
+
+    form.addEventListener('change', atualizar);
+    form.addEventListener('input', atualizar);
+    atualizar();
+})();
+</script>

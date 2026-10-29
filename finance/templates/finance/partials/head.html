@@ -1,0 +1,91 @@
+{% load static %}
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Controle financeiro{% endblock %} · Tio Patinhas</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💰</text></svg>">
+
+<!-- Paleta dos temas fica inline (e não no style.css) para nunca depender de
+     um CSS antigo em cache: sem estas variáveis nenhuma cor funciona. -->
+<style>
+/* Paleta dos temas, em "R G B" para o Tailwind aceitar opacidade (bg-fg/10).
+   O tema é escolhido pela classe .dark/.light no <html> (script logo abaixo). */
+:root,
+html.dark {
+  --c-bg: 10 10 10;
+  --c-surface: 17 17 17;
+  --c-card: 22 22 22;
+  --c-field: 22 22 22;
+  --c-border: 38 38 38;
+  --c-muted: 160 160 160;
+  --c-fg: 255 255 255;
+  --c-neon: 212 255 63;
+  color-scheme: dark;
+}
+
+html.light {
+  --c-bg: 245 245 240;
+  --c-surface: 250 250 247;
+  --c-card: 255 255 255;
+  --c-field: 250 250 247;
+  --c-border: 226 226 220;
+  --c-muted: 100 100 96;
+  --c-fg: 15 15 15;
+  --c-neon: 77 124 15;
+  color-scheme: light;
+}
+</style>
+
+<!-- Aplica o tema salvo (claro/escuro) antes de pintar a página, evitando "piscar" -->
+<script>
+  (function () {
+    var tema = localStorage.getItem('tema') || 'dark';
+    document.documentElement.classList.add(tema === 'light' ? 'light' : 'dark');
+  })();
+  function definirTema(tema) {
+    localStorage.setItem('tema', tema);
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(tema);
+    document.dispatchEvent(new CustomEvent('tema-alterado', { detail: tema }));
+  }
+  function alternarTema() {
+    definirTema(document.documentElement.classList.contains('light') ? 'dark' : 'light');
+  }
+  // Lê uma cor do tema atual (usado nos gráficos do Chart.js)
+  function corDoTema(nome, alpha) {
+    var rgb = getComputedStyle(document.documentElement).getPropertyValue('--c-' + nome).trim().split(' ').join(',');
+    return alpha === undefined ? 'rgb(' + rgb + ')' : 'rgba(' + rgb + ',' + alpha + ')';
+  }
+</script>
+
+<!-- Google Fonts: serifada para títulos + sans-serif limpa para o resto -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@600;700;800&display=swap" rel="stylesheet">
+
+<!-- Tailwind via CDN. As cores apontam para variáveis CSS (static/css/style.css),
+     que mudam conforme o tema claro/escuro. -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  function cor(nome) { return 'rgb(var(--c-' + nome + ') / <alpha-value>)'; }
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          bg: cor('bg'),
+          surface: cor('surface'),
+          card: cor('card'),
+          field: cor('field'),
+          borderdark: cor('border'),
+          muted: cor('muted'),
+          fg: cor('fg'),
+          neon: cor('neon'),
+        },
+        fontFamily: {
+          serif: ['"Playfair Display"', 'serif'],
+          sans: ['"Inter"', 'sans-serif'],
+        },
+      }
+    }
+  }
+</script>
+<link rel="stylesheet" href="{% static 'css/style.css' %}?v=3">

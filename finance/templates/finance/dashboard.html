@@ -1,0 +1,105 @@
+{% extends "finance/base.html" %}
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="mb-8 animate-fade-in">
+    <h1 class="font-serif text-3xl sm:text-4xl font-bold">Olá, {{ request.user.first_name|default:request.user.username }}</h1>
+    <p class="text-muted text-sm mt-1">Aqui está o resumo das suas finanças.</p>
+</div>
+
+<!-- Ações rápidas -->
+<div class="flex flex-wrap gap-3 mb-8">
+    <a href="{% url 'expense_create' %}" class="inline-flex items-center gap-2 bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">
+        + Adicionar gasto
+    </a>
+    <a href="{% url 'income_create' %}" class="inline-flex items-center gap-2 border border-borderdark text-fg text-sm font-medium rounded-lg px-5 py-2.5 hover:border-fg transition">
+        ＋ Adicionar entrada
+    </a>
+    <a href="{% url 'savingsbox_list' %}" class="inline-flex items-center gap-2 border border-borderdark text-fg text-sm font-medium rounded-lg px-5 py-2.5 hover:border-fg transition">
+        🐷 Guardar no cofrinho
+    </a>
+    <a href="{% url 'finance' %}" class="inline-flex items-center gap-2 border border-borderdark text-fg text-sm font-medium rounded-lg px-5 py-2.5 hover:border-fg transition">
+        📊 Ver finanças
+    </a>
+</div>
+
+<!-- Cards de resumo -->
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+    <div class="bg-card border border-borderdark rounded-2xl p-6 hover:border-fg/30 transition animate-fade-in">
+        <span class="text-xs uppercase tracking-wide text-muted">Saldo disponível</span>
+        <p class="font-serif text-3xl font-bold mt-2 {% if wallet.balance < 0 %}text-red-400{% else %}text-fg{% endif %}">
+            R$ {{ wallet.balance|floatformat:2 }}
+        </p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-6 hover:border-fg/30 transition animate-fade-in">
+        <span class="text-xs uppercase tracking-wide text-muted">Entradas do mês</span>
+        <p class="font-serif text-3xl font-bold mt-2 text-neon">R$ {{ total_entradas_mes|floatformat:2 }}</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-6 hover:border-fg/30 transition animate-fade-in">
+        <span class="text-xs uppercase tracking-wide text-muted">Gastos do mês</span>
+        <p class="font-serif text-3xl font-bold mt-2">R$ {{ total_gastos_mes|floatformat:2 }}</p>
+        {% if a_pagar_mes %}<a href="{% url 'finance' %}" class="text-xs text-muted hover:text-fg mt-1 inline-block">+ R$ {{ a_pagar_mes|floatformat:2 }} ainda a pagar este mês →</a>{% endif %}
+    </div>
+</div>
+
+<!-- Cofrinhos -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="font-serif text-xl font-semibold">Seus cofrinhos</h2>
+    <a href="{% url 'savingsbox_list' %}" class="text-sm text-muted hover:text-fg transition">Ver todos →</a>
+</div>
+
+{% if cofrinhos %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+    {% for cofrinho in cofrinhos %}
+    <div class="bg-card border border-borderdark rounded-2xl p-5 hover:border-fg/30 transition animate-fade-in">
+        <div class="flex items-center justify-between mb-3">
+            <span class="text-2xl">{{ cofrinho.icon }}</span>
+            {% if cofrinho.goal_reached %}
+                <span class="text-[10px] uppercase tracking-wide bg-neon text-bg rounded-full px-2 py-0.5 font-semibold">Meta atingida</span>
+            {% endif %}
+        </div>
+        <p class="text-sm text-muted truncate">{{ cofrinho.name }}</p>
+        <p class="font-serif text-xl font-bold mt-1">R$ {{ cofrinho.amount|floatformat:2 }}</p>
+        {% if cofrinho.goal %}
+        <div class="mt-3">
+            <div class="progress-track w-full h-1.5">
+                <div class="progress-bar h-full bg-neon" style="width: {{ cofrinho.progress_percent|stringformat:'s' }}%;"></div>
+            </div>
+            <p class="text-[11px] text-muted mt-1.5">{{ cofrinho.progress_percent }}% de R$ {{ cofrinho.goal|floatformat:2 }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-card border border-dashed border-borderdark rounded-2xl p-8 text-center mb-10">
+    <p class="text-muted text-sm mb-4">Você ainda não tem nenhum cofrinho.</p>
+    <a href="{% url 'savingsbox_create' %}" class="inline-flex bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">Criar primeiro cofrinho</a>
+</div>
+{% endif %}
+
+<!-- Últimos lançamentos -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="font-serif text-xl font-semibold">Últimos lançamentos</h2>
+    <a href="{% url 'expense_list' %}" class="text-sm text-muted hover:text-fg transition">Ver histórico →</a>
+</div>
+
+<div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden">
+    {% for lancamento in ultimos_lancamentos %}
+    <div class="flex items-center justify-between px-5 py-4 hover:bg-fg/[0.02] transition">
+        <div class="flex items-center gap-3 min-w-0">
+            <span class="text-xl shrink-0">{% if lancamento.type == 'income' %}{{ lancamento.income_type.icon|default:"💵" }}{% else %}{{ lancamento.category.icon|default:"💳" }}{% endif %}</span>
+            <div class="min-w-0">
+                <p class="text-sm truncate">{{ lancamento.description|default:lancamento.get_type_display }}</p>
+                <p class="text-xs text-muted">{% if lancamento.type == 'income' %}{{ lancamento.income_type.name|default:"Entrada" }}{% else %}{{ lancamento.category.name|default:"Sem categoria" }}{% endif %} · {{ lancamento.date|date:"d/m/Y" }}{% if lancamento.installment_label %} · parcela {{ lancamento.installment_label }}{% endif %}{% if lancamento.kind == 'fixo' %} · fixo{% endif %}</p>
+            </div>
+        </div>
+        <span class="text-sm font-medium shrink-0 {% if lancamento.type == 'income' %}text-neon{% else %}text-fg{% endif %}">
+            {% if lancamento.type == 'income' %}+{% else %}-{% endif %} R$ {{ lancamento.value|floatformat:2 }}
+        </span>
+    </div>
+    {% empty %}
+    <div class="px-5 py-10 text-center text-sm text-muted">Nenhum lançamento ainda. Que tal adicionar o primeiro?</div>
+    {% endfor %}
+</div>
+{% endblock %}

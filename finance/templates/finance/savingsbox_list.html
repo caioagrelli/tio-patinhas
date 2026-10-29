@@ -1,0 +1,58 @@
+{% extends "finance/base.html" %}
+{% block title %}Cofrinhos{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6 animate-fade-in">
+    <div>
+        <h1 class="font-serif text-3xl font-bold">Cofrinhos</h1>
+        <p class="text-muted text-sm mt-1">Saldo disponível para guardar: <span class="text-fg font-medium">R$ {{ wallet.balance|floatformat:2 }}</span></p>
+    </div>
+    <a href="{% url 'savingsbox_create' %}" class="inline-flex items-center gap-2 bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">
+        + Novo cofrinho
+    </a>
+</div>
+
+{% if cofrinhos %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    {% for cofrinho in cofrinhos %}
+    <div class="bg-card border border-borderdark rounded-2xl p-6 hover:border-fg/30 transition animate-fade-in flex flex-col">
+        <div class="flex items-center justify-between mb-4">
+            <span class="text-3xl">{{ cofrinho.icon }}</span>
+            <span class="text-[11px] text-muted">{{ cofrinho.created_at|date:"d/m/Y" }}</span>
+        </div>
+
+        <h3 class="font-serif text-lg font-semibold mb-1">{{ cofrinho.name }}</h3>
+        <p class="font-serif text-2xl font-bold mb-2">R$ {{ cofrinho.amount|floatformat:2 }}</p>
+
+        {% if cofrinho.goal %}
+            <div class="mb-1">
+                <div class="progress-track w-full h-1.5">
+                    <div class="progress-bar h-full bg-neon" style="width: {{ cofrinho.progress_percent|stringformat:'s' }}%;"></div>
+                </div>
+            </div>
+            <p class="text-[11px] text-muted mb-4">{{ cofrinho.progress_percent }}% da meta de R$ {{ cofrinho.goal|floatformat:2 }}</p>
+            {% if cofrinho.goal_reached %}
+                <span class="inline-block w-fit text-[10px] uppercase tracking-wide bg-neon text-bg rounded-full px-2 py-0.5 font-semibold mb-4">🎉 Meta atingida</span>
+            {% endif %}
+        {% else %}
+            <p class="text-[11px] text-muted mb-4">Sem meta definida</p>
+        {% endif %}
+
+        <div class="mt-auto grid grid-cols-2 gap-2 pt-2">
+            <a href="{% url 'savingsbox_deposit' cofrinho.pk %}" class="text-center bg-fg text-bg text-xs font-medium rounded-lg px-3 py-2 hover:bg-neon transition">Depositar</a>
+            <a href="{% url 'savingsbox_withdraw' cofrinho.pk %}" class="text-center border border-borderdark text-xs text-fg rounded-lg px-3 py-2 hover:border-fg transition">Resgatar</a>
+        </div>
+        <div class="flex items-center justify-center gap-4 mt-3 text-xs">
+            <a href="{% url 'savingsbox_update' cofrinho.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+            <a href="{% url 'savingsbox_delete' cofrinho.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-card border border-dashed border-borderdark rounded-2xl p-12 text-center">
+    <p class="text-muted text-sm mb-4">Você ainda não tem nenhum cofrinho.</p>
+    <a href="{% url 'savingsbox_create' %}" class="inline-flex bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">Criar primeiro cofrinho</a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "finance/base.html" %}
+{% block title %}Excluir lançamento{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-card border border-borderdark rounded-2xl p-8 animate-fade-in">
+    <h1 class="font-serif text-2xl font-bold mb-3">Excluir lançamento?</h1>
+    <p class="text-muted text-sm mb-6">
+        "{{ transacao.description|default:transacao.get_type_display }}"{% if transacao.installment_label %} (parcela {{ transacao.installment_label }}){% endif %}
+        — R$ {{ transacao.value|floatformat:2 }} em {{ transacao.date|date:"d/m/Y" }}.
+        {% if transacao.applied %}
+            O valor será {% if transacao.type == 'income' %}removido do{% else %}devolvido ao{% endif %} seu saldo.
+        {% else %}
+            Ele ainda é previsto, então o saldo não muda.
+        {% endif %}
+        {% if transacao.recurrence %}O fixo mensal continua ativo para os próximos meses.{% endif %}
+        Essa ação não pode ser desfeita.
+    </p>
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% if transacao.installment_plan %}
+        <div class="space-y-2 text-sm">
+            <label class="flex items-center gap-2"><input type="radio" name="escopo" value="parcela" checked class="accent-neon"> Só esta parcela</label>
+            <label class="flex items-center gap-2"><input type="radio" name="escopo" value="plano" class="accent-neon"> O parcelamento inteiro ({{ transacao.installment_plan.installments }} parcelas)</label>
+        </div>
+        {% endif %}
+        <div class="flex items-center gap-3">
+            <button type="submit" class="bg-fg text-bg text-sm font-medium rounded-lg px-6 py-2.5 hover:bg-red-400 transition">
+                Sim, excluir
+            </button>
+            <a href="{% url destino %}" class="border border-borderdark text-sm text-fg rounded-lg px-6 py-2.5 hover:border-fg transition">
+                Cancelar
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

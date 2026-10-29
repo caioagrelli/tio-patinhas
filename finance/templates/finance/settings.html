@@ -1,0 +1,146 @@
+{% extends "finance/base.html" %}
+{% block title %}Configurações · {{ config.titulo }}{% endblock %}
+
+{% block content %}
+<div class="mb-6 animate-fade-in">
+    <h1 class="font-serif text-3xl font-bold">Configurações</h1>
+    <p class="text-muted text-sm mt-1">Personalize o sistema do seu jeito.</p>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+    <!-- Abas -->
+    <nav class="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible text-sm">
+        {% for chave, rotulo in abas %}
+        <a href="{% url 'settings' chave %}"
+           class="whitespace-nowrap px-4 py-2.5 rounded-lg transition {% if aba == chave %}bg-fg text-bg font-medium{% else %}text-muted hover:text-fg hover:bg-card{% endif %}">
+            {{ rotulo }}
+        </a>
+        {% endfor %}
+    </nav>
+
+    <section class="md:col-span-3 animate-fade-in">
+        {% if aba == "aparencia" %}
+            <h2 class="font-serif text-xl font-semibold mb-1">Aparência</h2>
+            <p class="text-muted text-sm mb-5">Escolha o tema. A preferência fica salva neste navegador.</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-xl">
+                <button type="button" onclick="definirTema('dark')"
+                        class="text-left rounded-2xl border-2 p-4 transition border-borderdark [.dark_&]:border-neon">
+                    <div class="rounded-lg p-3 mb-3" style="background:#0a0a0a;border:1px solid #262626">
+                        <div class="h-2 w-16 rounded mb-2" style="background:#fff"></div>
+                        <div class="h-2 w-24 rounded mb-3" style="background:#555"></div>
+                        <div class="h-5 w-14 rounded" style="background:#d4ff3f"></div>
+                    </div>
+                    <p class="text-sm font-medium">🌙 Escuro</p>
+                    <p class="text-xs text-muted hidden [.dark_&]:block">Em uso</p>
+                </button>
+                <button type="button" onclick="definirTema('light')"
+                        class="text-left rounded-2xl border-2 p-4 transition border-borderdark [.light_&]:border-neon">
+                    <div class="rounded-lg p-3 mb-3" style="background:#f5f5f0;border:1px solid #e2e2dc">
+                        <div class="h-2 w-16 rounded mb-2" style="background:#0f0f0f"></div>
+                        <div class="h-2 w-24 rounded mb-3" style="background:#aaa"></div>
+                        <div class="h-5 w-14 rounded" style="background:#4d7c0f"></div>
+                    </div>
+                    <p class="text-sm font-medium">☀️ Claro</p>
+                    <p class="text-xs text-muted hidden [.light_&]:block">Em uso</p>
+                </button>
+            </div>
+
+        {% else %}
+            <div class="flex flex-wrap items-center justify-between gap-4 mb-5">
+                <div>
+                    <h2 class="font-serif text-xl font-semibold">{{ config.titulo }}</h2>
+                    <p class="text-muted text-sm mt-1">{{ config.descricao }}</p>
+                </div>
+                <a href="{% url 'settings_create' aba %}" class="inline-flex items-center gap-2 bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">
+                    + Adicionar {{ config.singular }}
+                </a>
+            </div>
+
+            {% if aba == "cartoes" %}
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {% for c in itens %}
+                    <div class="bg-card border border-borderdark rounded-2xl p-5 hover:border-fg/30 transition">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="h-3 w-3 rounded-full" style="background-color: {{ c.card.color }};"></span>
+                                <span class="font-medium">{{ c.card.name }}</span>
+                            </div>
+                            <div class="flex items-center gap-3 text-xs">
+                                <a href="{% url 'settings_update' aba c.card.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+                                <a href="{% url 'settings_delete' aba c.card.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+                            </div>
+                        </div>
+                        {% if c.card.limit %}
+                            <div class="flex items-baseline justify-between text-xs text-muted mb-1.5">
+                                <span>Limite usado</span>
+                                <span>R$ {{ c.usado|floatformat:2 }} de R$ {{ c.card.limit|floatformat:2 }}</span>
+                            </div>
+                            <div class="progress-track w-full h-1.5">
+                                <div class="progress-bar {% if c.percentual >= 80 %}bg-red-400{% else %}bg-neon{% endif %}" style="width: {{ c.percentual|stringformat:'s' }}%;"></div>
+                            </div>
+                            <p class="text-xs mt-2 {% if c.disponivel < 0 %}text-red-400{% else %}text-muted{% endif %}">Disponível: R$ {{ c.disponivel|floatformat:2 }}</p>
+                        {% else %}
+                            <p class="text-xs text-muted">Sem limite cadastrado.</p>
+                        {% endif %}
+                        <p class="text-[11px] text-muted mt-2">
+                            {% if c.card.closing_day %}Fecha dia {{ c.card.closing_day }}{% else %}Fatura = mês corrente{% endif %}
+                            {% if c.card.due_day %} · vence dia {{ c.card.due_day }}{% endif %}
+                        </p>
+                    </div>
+                    {% empty %}
+                    <div class="sm:col-span-2 bg-card border border-dashed border-borderdark rounded-2xl p-8 text-center text-sm text-muted">Nenhum cartão cadastrado ainda.</div>
+                    {% endfor %}
+                </div>
+
+            {% elif aba == "pagamento" %}
+                <div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden">
+                    {% for item in itens %}
+                    <div class="flex items-center justify-between gap-4 px-5 py-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-xl">{{ item.icon }}</span>
+                            <div>
+                                <p class="text-sm">{{ item.name }}</p>
+                                <p class="text-xs text-muted">{{ item.get_kind_display }}{% if item.uses_card %} · pergunta o cartão{% endif %}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 text-xs">
+                            <a href="{% url 'settings_update' aba item.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+                            <a href="{% url 'settings_delete' aba item.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="px-5 py-10 text-center text-sm text-muted">Nenhuma forma de pagamento cadastrada.</div>
+                    {% endfor %}
+                </div>
+
+            {% else %}
+                {# Categorias e tipos de entrada: grade com ícone e cor #}
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                    {% for item in itens %}
+                    <div class="bg-card border border-borderdark rounded-2xl p-5 hover:border-fg/30 transition">
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="text-2xl">{{ item.icon }}</span>
+                            <span class="h-3 w-3 rounded-full" style="background-color: {{ item.color }};"></span>
+                        </div>
+                        <p class="text-sm font-medium truncate">{{ item.name }}</p>
+                        {% if aba == "categorias" %}
+                        <p class="text-[11px] text-muted mt-0.5 mb-3">{% if item.is_default %}Padrão do sistema{% else %}Sua categoria{% endif %}</p>
+                        {% else %}
+                        <div class="mb-3"></div>
+                        {% endif %}
+                        {% if not item.is_default %}
+                        <div class="flex items-center gap-4 text-xs">
+                            <a href="{% url 'settings_update' aba item.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+                            <a href="{% url 'settings_delete' aba item.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="col-span-full bg-card border border-dashed border-borderdark rounded-2xl p-8 text-center text-sm text-muted">Nada cadastrado ainda.</div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

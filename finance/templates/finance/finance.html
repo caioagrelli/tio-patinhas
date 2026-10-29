@@ -1,0 +1,252 @@
+{% extends "finance/base.html" %}
+{% block title %}Finanças{% endblock %}
+
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6 animate-fade-in">
+    <div>
+        <h1 class="font-serif text-3xl font-bold">Finanças</h1>
+        <p class="text-muted text-sm mt-1">Compromissos do mês, cartões, parcelamentos, fixos e o que vem pela frente.</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+        <a href="{% url 'expense_create' %}" class="inline-flex items-center gap-2 bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">+ Gasto</a>
+        <a href="{% url 'income_create' %}" class="inline-flex items-center gap-2 border border-borderdark text-fg text-sm font-medium rounded-lg px-5 py-2.5 hover:border-fg transition">+ Entrada</a>
+    </div>
+</div>
+
+<!-- Alertas e dicas -->
+<div class="space-y-2 mb-8">
+    {% for nivel, texto in dicas %}
+    <div class="rounded-lg border px-4 py-3 text-sm flex items-start gap-2
+        {% if nivel == 'alerta' %}border-yellow-900 bg-yellow-950/30 text-yellow-300{% elif nivel == 'ok' %}border-borderdark bg-card text-neon{% else %}border-borderdark bg-card text-muted{% endif %}">
+        <span>{% if nivel == 'alerta' %}⚠️{% elif nivel == 'ok' %}✅{% else %}💡{% endif %}</span>
+        <span>{{ texto }}</span>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Resumo do mês -->
+<h2 class="font-serif text-xl font-semibold mb-4">{{ hoje|date:"F \d\e Y"|capfirst }}</h2>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">Saldo atual</span>
+        <p class="font-serif text-2xl font-bold mt-2 {% if wallet.balance < 0 %}text-red-400{% endif %}">R$ {{ wallet.balance|floatformat:2 }}</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">A receber no mês</span>
+        <p class="font-serif text-2xl font-bold mt-2 text-neon">R$ {{ previsto_entrar|floatformat:2 }}</p>
+        <p class="text-[11px] text-muted mt-1">de R$ {{ entradas_mes|floatformat:2 }} em entradas</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">A pagar no mês</span>
+        <p class="font-serif text-2xl font-bold mt-2">R$ {{ previsto_sair|floatformat:2 }}</p>
+        <p class="text-[11px] text-muted mt-1">de R$ {{ gastos_mes|floatformat:2 }} em gastos</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">Saldo previsto no fim do mês</span>
+        <p class="font-serif text-2xl font-bold mt-2 {% if saldo_projetado < 0 %}text-red-400{% endif %}">R$ {{ saldo_projetado|floatformat:2 }}</p>
+    </div>
+</div>
+
+<!-- Cartões -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="font-serif text-xl font-semibold">Cartões</h2>
+    <a href="{% url 'settings' 'cartoes' %}" class="text-sm text-muted hover:text-fg transition">Gerenciar →</a>
+</div>
+{% if cartoes %}
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-10">
+    {% for c in cartoes %}
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <div class="flex items-center gap-2.5 mb-4">
+            <span class="h-3 w-3 rounded-full" style="background-color: {{ c.card.color }};"></span>
+            <span class="font-medium">{{ c.card.name }}</span>
+        </div>
+        <span class="text-xs uppercase tracking-wide text-muted">Fatura atual</span>
+        <p class="font-serif text-2xl font-bold mt-1">R$ {{ c.fatura|floatformat:2 }}</p>
+        <p class="text-[11px] text-muted mb-4">
+            {{ c.fatura_inicio|date:"d/m" }} a {{ c.fatura_fim|date:"d/m" }}{% if c.vencimento %} · vence {{ c.vencimento|date:"d/m" }}{% endif %}
+        </p>
+        {% if c.card.limit %}
+        <div class="flex items-baseline justify-between text-xs text-muted mb-1.5">
+            <span>{{ c.percentual|stringformat:'s' }}% do limite</span>
+            <span>Disponível R$ {{ c.disponivel|floatformat:2 }}</span>
+        </div>
+        <div class="progress-track w-full h-1.5">
+            <div class="progress-bar {% if c.percentual >= 80 %}bg-red-400{% else %}bg-neon{% endif %}" style="width: {{ c.percentual|stringformat:'s' }}%;"></div>
+        </div>
+        <p class="text-[11px] text-muted mt-1.5">Usado R$ {{ c.usado|floatformat:2 }} (fatura + parcelas futuras) de R$ {{ c.card.limit|floatformat:2 }}</p>
+        {% else %}
+        <p class="text-xs text-muted">Sem limite cadastrado — <a href="{% url 'settings_update' 'cartoes' c.card.pk %}" class="text-neon hover:underline">adicionar</a></p>
+        {% endif %}
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="bg-card border border-dashed border-borderdark rounded-2xl p-8 text-center mb-10">
+    <p class="text-muted text-sm mb-4">Cadastre seus cartões para acompanhar fatura e limite.</p>
+    <a href="{% url 'settings_create' 'cartoes' %}" class="inline-flex bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">Cadastrar cartão</a>
+</div>
+{% endif %}
+
+<!-- Projeção -->
+<h2 class="font-serif text-xl font-semibold mb-4">Próximos 6 meses</h2>
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-10">
+    <div class="lg:col-span-3 bg-card border border-borderdark rounded-2xl p-6">
+        <canvas id="graficoProjecao" height="220"></canvas>
+    </div>
+    <div class="lg:col-span-2 bg-card border border-borderdark rounded-2xl overflow-hidden">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-muted uppercase tracking-wide border-b border-borderdark">
+                    <th class="px-4 py-3 font-medium">Mês</th>
+                    <th class="px-4 py-3 font-medium text-right">Entra</th>
+                    <th class="px-4 py-3 font-medium text-right">Sai</th>
+                    <th class="px-4 py-3 font-medium text-right">Saldo</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-borderdark">
+                {% for linha in projecao %}
+                <tr>
+                    <td class="px-4 py-3 capitalize">{{ linha.mes|date:"M/y" }}</td>
+                    <td class="px-4 py-3 text-right text-neon">{{ linha.entradas|floatformat:2 }}</td>
+                    <td class="px-4 py-3 text-right" title="Fixos R$ {{ linha.fixos|floatformat:2 }} · Parcelas R$ {{ linha.parcelas|floatformat:2 }}">{{ linha.saidas|floatformat:2 }}</td>
+                    <td class="px-4 py-3 text-right font-medium {% if linha.saldo < 0 %}text-red-400{% endif %}">{{ linha.saldo|floatformat:2 }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <p class="text-[11px] text-muted px-4 py-3 border-t border-borderdark">Considera fixos ativos e parcelas já lançadas. Gastos do dia a dia não entram.</p>
+    </div>
+</div>
+
+<!-- Fixos -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
+    <div>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-serif text-xl font-semibold">Gastos fixos</h2>
+            <span class="text-sm text-muted">R$ {{ total_gastos_fixos|floatformat:2 }}/mês</span>
+        </div>
+        {% if comprometimento is not None %}
+        <div class="mb-3">
+            <div class="flex justify-between text-xs text-muted mb-1.5"><span>Renda fixa comprometida</span><span>{{ comprometimento|stringformat:'s' }}%</span></div>
+            <div class="progress-track w-full h-1.5"><div class="progress-bar {% if comprometimento > 50 %}bg-red-400{% else %}bg-neon{% endif %}" style="width: {% if comprometimento > 100 %}100{% else %}{{ comprometimento|stringformat:'s' }}{% endif %}%;"></div></div>
+        </div>
+        {% endif %}
+        {% include "finance/partials/recurrence_list.html" with itens=gastos_fixos vazio="Nenhum gasto fixo. Ao cadastrar um gasto, escolha “Fixo todo mês”." %}
+    </div>
+    <div>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-serif text-xl font-semibold">Entradas fixas</h2>
+            <span class="text-sm text-muted">R$ {{ total_entradas_fixas|floatformat:2 }}/mês</span>
+        </div>
+        {% include "finance/partials/recurrence_list.html" with itens=entradas_fixas vazio="Nenhuma entrada fixa. Ao cadastrar uma entrada, escolha “Fixa todo mês”." %}
+    </div>
+</div>
+
+<!-- Parcelamentos -->
+<div class="flex items-center justify-between mb-4">
+    <h2 class="font-serif text-xl font-semibold">Parcelamentos em andamento</h2>
+    <span class="text-sm text-muted">Falta pagar R$ {{ total_parcelas_restantes|floatformat:2 }}</span>
+</div>
+<div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden mb-4">
+    {% for p in parcelamentos_ativos %}
+    <div class="px-5 py-4">
+        <div class="flex items-center justify-between gap-4">
+            <div class="min-w-0">
+                <p class="text-sm truncate">{{ p.category.icon|default:"🛍️" }} {{ p.description|default:"(sem descrição)" }}</p>
+                <p class="text-xs text-muted">
+                    {{ p.pagas }}/{{ p.installments }} pagas · {{ p.installments }}x de R$ {{ p.transactions.first.value|floatformat:2 }}
+                    {% if p.card %} · {{ p.card.name }}{% endif %} · termina {{ p.ultima|date:"M/Y" }}
+                </p>
+            </div>
+            <div class="text-right shrink-0">
+                <p class="text-sm font-medium">R$ {{ p.restante|floatformat:2 }}</p>
+                <div class="flex gap-2 justify-end text-xs mt-0.5">
+                    <a href="{% url 'installment_plan_update' p.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+                    <a href="{% url 'installment_plan_delete' p.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+                </div>
+            </div>
+        </div>
+        <div class="progress-track w-full h-1 mt-3">
+            <div class="progress-bar bg-neon" style="width: {% widthratio p.pagas p.installments 100 %}%;"></div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="px-5 py-10 text-center text-sm text-muted">Nenhum parcelamento em andamento. Ao cadastrar um gasto, escolha “Parcelado”.</div>
+    {% endfor %}
+</div>
+{% if parcelamentos_quitados %}
+<details class="mb-10">
+    <summary class="text-sm text-muted cursor-pointer hover:text-fg">Ver {{ parcelamentos_quitados|length }} parcelamento(s) quitado(s)</summary>
+    <div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden mt-3">
+        {% for p in parcelamentos_quitados %}
+        <div class="flex items-center justify-between px-5 py-3 text-sm">
+            <span>✅ {{ p.description|default:"(sem descrição)" }} <span class="text-muted text-xs">· {{ p.installments }}x · terminou {{ p.ultima|date:"M/Y" }}</span></span>
+            <span class="text-muted">R$ {{ p.total_value|floatformat:2 }}</span>
+        </div>
+        {% endfor %}
+    </div>
+</details>
+{% else %}
+<div class="mb-10"></div>
+{% endif %}
+
+<!-- Próximos lançamentos -->
+<h2 class="font-serif text-xl font-semibold mb-4">Próximos 30 dias</h2>
+<div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden">
+    {% for tx in proximos %}
+    <div class="flex items-center justify-between px-5 py-3.5">
+        <div class="flex items-center gap-3 min-w-0">
+            <span class="text-xs text-muted w-12 shrink-0">{{ tx.date|date:"d/m" }}</span>
+            <span class="text-sm truncate">
+                {{ tx.description|default:tx.get_type_display }}
+                {% if tx.installment_label %}<span class="text-xs text-muted">· parcela {{ tx.installment_label }}</span>{% endif %}
+                {% if tx.kind == "fixo" %}<span class="text-xs text-muted">· fixo</span>{% endif %}
+                {% if tx.card %}<span class="text-xs text-muted">· {{ tx.card.name }}</span>{% endif %}
+            </span>
+        </div>
+        <span class="text-sm font-medium shrink-0 {% if tx.type == 'income' %}text-neon{% endif %}">
+            {% if tx.type == 'income' %}+{% else %}-{% endif %} R$ {{ tx.value|floatformat:2 }}
+        </span>
+    </div>
+    {% empty %}
+    <div class="px-5 py-10 text-center text-sm text-muted">Nada previsto para os próximos 30 dias.</div>
+    {% endfor %}
+</div>
+
+{{ chart_projecao|json_script:"chart-projecao" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+    const dados = JSON.parse(document.getElementById('chart-projecao').textContent);
+    const ctx = document.getElementById('graficoProjecao');
+    let grafico;
+    function desenhar() {
+        if (grafico) grafico.destroy();
+        const texto = corDoTema('muted'), grade = corDoTema('border');
+        grafico = new Chart(ctx, {
+            data: {
+                labels: dados.labels,
+                datasets: [
+                    { type: 'bar', label: 'Entradas', data: dados.entradas, backgroundColor: corDoTema('neon'), borderRadius: 6 },
+                    { type: 'bar', label: 'Saídas', data: dados.saidas, backgroundColor: corDoTema('fg', 0.35), borderRadius: 6 },
+                    { type: 'line', label: 'Saldo previsto', data: dados.saldo, borderColor: '#4fd4ff', backgroundColor: '#4fd4ff', tension: 0.3, pointRadius: 3 },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { color: texto, boxWidth: 10, padding: 14, font: { family: 'Inter' } } } },
+                scales: {
+                    x: { ticks: { color: texto }, grid: { display: false } },
+                    y: { ticks: { color: texto }, grid: { color: grade } },
+                }
+            }
+        });
+    }
+    desenhar();
+    document.addEventListener('tema-alterado', desenhar);
+})();
+</script>
+{% endblock %}

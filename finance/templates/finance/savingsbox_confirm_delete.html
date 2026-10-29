@@ -1,0 +1,21 @@
+{% extends "finance/base.html" %}
+{% block title %}Excluir cofrinho{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto bg-card border border-borderdark rounded-2xl p-8 animate-fade-in">
+    <h1 class="font-serif text-2xl font-bold mb-3">Excluir "{{ cofrinho.name }}"?</h1>
+    <p class="text-muted text-sm mb-6">
+        O valor guardado (R$ {{ cofrinho.amount|floatformat:2 }}) será devolvido ao seu saldo principal.
+        Essa ação não pode ser desfeita.
+    </p>
+    <form method="post" class="flex items-center gap-3">
+        {% csrf_token %}
+        <button type="submit" class="bg-fg text-bg text-sm font-medium rounded-lg px-6 py-2.5 hover:bg-red-400 transition">
+            Sim, excluir
+        </button>
+        <a href="{% url 'savingsbox_list' %}" class="border border-borderdark text-sm text-fg rounded-lg px-6 py-2.5 hover:border-fg transition">
+            Cancelar
+        </a>
+    </form>
+</div>
+{% endblock %}

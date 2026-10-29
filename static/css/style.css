@@ -1,0 +1,137 @@
+/* ---------------------------------------------------------------------
+   Ajustes finos que o Tailwind (via CDN) não cobre bem sozinho.
+   O grosso do visual (cores, espaçamento, grid, hover) fica nas
+   classes utilitárias diretamente nos templates.
+   --------------------------------------------------------------------- */
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: rgb(var(--c-bg));
+}
+
+/* Scrollbar discreta, acompanhando o tema */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: rgb(var(--c-bg));
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--c-border));
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--c-muted));
+}
+
+/* Ícone do seletor de data legível no tema escuro */
+html.dark input[type="date"]::-webkit-calendar-picker-indicator,
+html.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.7;
+  cursor: pointer;
+}
+
+/* Input de cor (usado em Categoria/Cofrinho) mais compacto e arredondado */
+input[type="color"] {
+  padding: 4px;
+  cursor: pointer;
+}
+
+/* Cores de alerta com contraste no tema claro */
+html.light .text-red-400 { color: #dc2626; }
+html.light .text-red-300 { color: #b91c1c; }
+html.light .text-yellow-300 { color: #a16207; }
+html.light .bg-red-950\/40 { background-color: #fef2f2; }
+html.light .bg-yellow-950\/30 { background-color: #fefce8; }
+html.light .border-red-900 { border-color: #fecaca; }
+html.light .border-yellow-900 { border-color: #fde68a; }
+
+/* Microanimação de entrada usada em cards e alertas */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in {
+  animation: fadeInUp 0.35s ease-out both;
+}
+
+/* Barra de progresso (meta do cofrinho, limite do cartão, parcelas pagas) */
+.progress-track {
+  background-color: rgb(var(--c-border));
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.6s ease;
+}
+
+/* Botões de opção (À vista / Parcelado / Fixo) no formulário de lançamento */
+.opcao-modalidade input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.opcao-modalidade label {
+  display: block;
+  cursor: pointer;
+  text-align: center;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.6rem;
+  border: 1px solid rgb(var(--c-border));
+  color: rgb(var(--c-muted));
+  font-size: 0.875rem;
+  transition: all 0.15s ease;
+}
+.opcao-modalidade input:checked + label,
+.opcao-modalidade label:has(input:checked) {
+  background-color: rgb(var(--c-fg));
+  border-color: rgb(var(--c-fg));
+  color: rgb(var(--c-bg));
+  font-weight: 500;
+}
+.opcao-modalidade input:focus-visible + label {
+  outline: 2px solid rgb(var(--c-neon));
+}
+
+/* Seletores compactos da barra de filtros (Gastos/Entradas) */
+.filtro-select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: rgb(var(--c-card));
+  border: 1px solid rgb(var(--c-border));
+  color: rgb(var(--c-fg));
+  border-radius: 999px;
+  font-size: 0.75rem;
+  line-height: 1rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+select.filtro-select {
+  padding-right: 2rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%23888'%3E%3Cpath d='M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 1rem;
+}
+.filtro-select:hover,
+.filtro-select:focus {
+  border-color: rgb(var(--c-fg) / 0.5);
+  outline: none;
+}
+.filtro-select.ativo {
+  border-color: rgb(var(--c-neon));
+}

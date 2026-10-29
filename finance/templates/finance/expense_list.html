@@ -1,0 +1,8 @@
+{% extends "finance/base.html" %}
+{% block title %}Gastos{% endblock %}
+
+{% block content %}
+{% with titulo="Gastos" subtitulo="Histórico de saídas: à vista, parceladas e fixas." titulo_botao="Adicionar gasto" url_create="expense_create" url_update_name="expense_update" cor_valor="text-fg" %}
+    {% include "finance/partials/transaction_list.html" %}
+{% endwith %}
+{% endblock %}

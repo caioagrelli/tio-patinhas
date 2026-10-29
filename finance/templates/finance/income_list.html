@@ -1,0 +1,8 @@
+{% extends "finance/base.html" %}
+{% block title %}Entradas{% endblock %}
+
+{% block content %}
+{% with titulo="Entradas" subtitulo="Histórico de entradas, com filtro por período e tipo de entrada." titulo_botao="Adicionar entrada" url_create="income_create" url_update_name="income_update" cor_valor="text-neon" %}
+    {% include "finance/partials/transaction_list.html" %}
+{% endwith %}
+{% endblock %}

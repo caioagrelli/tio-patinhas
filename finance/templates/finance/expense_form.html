@@ -1,0 +1,8 @@
+{% extends "finance/base.html" %}
+{% block title %}{% if editando %}Editar{% else %}Novo{% endif %} gasto{% endblock %}
+
+{% block content %}
+{% with titulo="gasto" url_cancel="expense_list" %}
+    {% include "finance/partials/transaction_form.html" %}
+{% endwith %}
+{% endblock %}

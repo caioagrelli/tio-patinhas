@@ -1,0 +1,37 @@
+[
+  {
+    "model": "finance.category",
+    "pk": 1,
+    "fields": {"name": "Alimentação", "icon": "🍔", "color": "#d4ff3f", "user": null, "is_default": true}
+  },
+  {
+    "model": "finance.category",
+    "pk": 2,
+    "fields": {"name": "Transporte", "icon": "🚌", "color": "#4fd4ff", "user": null, "is_default": true}
+  },
+  {
+    "model": "finance.category",
+    "pk": 3,
+    "fields": {"name": "Lazer", "icon": "🎬", "color": "#ff4fd4", "user": null, "is_default": true}
+  },
+  {
+    "model": "finance.category",
+    "pk": 4,
+    "fields": {"name": "Moradia", "icon": "🏠", "color": "#ffb84f", "user": null, "is_default": true}
+  },
+  {
+    "model": "finance.category",
+    "pk": 5,
+    "fields": {"name": "Saúde", "icon": "💊", "color": "#4fff88", "user": null, "is_default": true}
+  },
+  {
+    "model": "finance.category",
+    "pk": 6,
+    "fields": {"name": "Educação", "icon": "📚", "color": "#a04fff", "user": null, "is_default": true}
+  },
+  {
+    "model": "finance.category",
+    "pk": 7,
+    "fields": {"name": "Outros", "icon": "📦", "color": "#a0a0a0", "user": null, "is_default": true}
+  }
+]

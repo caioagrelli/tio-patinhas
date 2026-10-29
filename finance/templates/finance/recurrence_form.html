@@ -1,0 +1,22 @@
+{% extends "finance/base.html" %}
+{% block title %}Editar fixo{% endblock %}
+
+{% block content %}
+<div class="max-w-lg animate-fade-in">
+    <a href="{% url 'finance' %}" class="text-sm text-muted hover:text-fg transition">← Finanças</a>
+    <h1 class="font-serif text-3xl font-bold mt-3 mb-1">Editar {% if recorrencia.type == "income" %}entrada fixa{% else %}gasto fixo{% endif %}</h1>
+    <p class="text-muted text-sm mb-8">
+        Começou em {{ recorrencia.start_date|date:"d/m/Y" }}. As mudanças valem para os próximos meses;
+        os lançamentos já gerados podem ser editados um a um na lista de {% if recorrencia.type == "income" %}entradas{% else %}gastos{% endif %}.
+    </p>
+
+    <form method="post" class="bg-card border border-borderdark rounded-2xl p-6 sm:p-8 space-y-5">
+        {% csrf_token %}
+        {% include "finance/partials/generic_fields.html" %}
+        <div class="flex items-center gap-3 pt-2">
+            <button type="submit" class="bg-fg text-bg text-sm font-medium rounded-lg px-6 py-2.5 hover:bg-neon transition">Salvar</button>
+            <a href="{% url 'finance' %}" class="border border-borderdark text-sm text-fg rounded-lg px-6 py-2.5 hover:border-fg transition">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

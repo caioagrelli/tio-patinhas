@@ -1,0 +1,29 @@
+{% comment %} Lista de lançamentos fixos. Espera: itens (Recurrence), vazio {% endcomment %}
+<div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden">
+    {% for r in itens %}
+    <div class="flex items-center justify-between gap-4 px-5 py-3.5 {% if not r.active %}opacity-50{% endif %}">
+        <div class="min-w-0">
+            <p class="text-sm truncate">
+                {% if r.type == "income" %}{{ r.income_type.icon|default:"💵" }}{% else %}{{ r.category.icon|default:"📌" }}{% endif %}
+                {{ r.description|default:"(sem descrição)" }}
+                {% if not r.active %}<span class="text-[10px] uppercase tracking-wide text-muted">· pausado</span>{% endif %}
+            </p>
+            <p class="text-xs text-muted">
+                Todo dia {{ r.day_of_month }}
+                {% if r.payment_method %} · {{ r.payment_method.name }}{% endif %}
+                {% if r.card %} · {{ r.card.name }}{% endif %}
+                {% if r.end_date %} · até {{ r.end_date|date:"m/Y" }}{% endif %}
+            </p>
+        </div>
+        <div class="text-right shrink-0">
+            <p class="text-sm font-medium {% if r.type == 'income' %}text-neon{% endif %}">R$ {{ r.value|floatformat:2 }}</p>
+            <div class="flex gap-2 justify-end text-xs mt-0.5">
+                <a href="{% url 'recurrence_update' r.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+                <a href="{% url 'recurrence_delete' r.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="px-5 py-8 text-center text-sm text-muted">{{ vazio }}</div>
+    {% endfor %}
+</div>

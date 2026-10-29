@@ -1,0 +1,8 @@
+{% extends "finance/base.html" %}
+{% block title %}{% if editando %}Editar{% else %}Nova{% endif %} entrada{% endblock %}
+
+{% block content %}
+{% with titulo="entrada" url_cancel="income_list" %}
+    {% include "finance/partials/transaction_form.html" %}
+{% endwith %}
+{% endblock %}

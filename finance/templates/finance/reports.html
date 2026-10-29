@@ -1,0 +1,224 @@
+{% extends "finance/base.html" %}
+{% block title %}Relatórios{% endblock %}
+
+{% block content %}
+<div class="mb-6 animate-fade-in">
+    <h1 class="font-serif text-3xl font-bold">Relatórios</h1>
+    <p class="text-muted text-sm mt-1">Entradas, gastos (incluindo fixos e parcelas) e para onde vai o seu dinheiro.</p>
+</div>
+
+<!-- Pills de período -->
+<div class="flex items-center gap-2 overflow-x-auto pb-2 mb-3">
+    {% for valor, rotulo in periodos %}
+        <a href="?period={{ valor }}"
+           class="whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-medium transition
+               {% if period == valor %}bg-fg text-bg{% else %}bg-card border border-borderdark text-muted hover:text-fg{% endif %}">
+            {{ rotulo }}
+        </a>
+    {% endfor %}
+</div>
+
+{% if period == "personalizado" %}
+<form method="get" class="flex flex-wrap items-end gap-3 bg-card border border-borderdark rounded-xl p-4 mb-6">
+    <input type="hidden" name="period" value="personalizado">
+    <div>
+        <label class="block text-xs text-muted mb-1">De</label>
+        {{ filtro.start_date }}
+    </div>
+    <div>
+        <label class="block text-xs text-muted mb-1">Até</label>
+        {{ filtro.end_date }}
+    </div>
+    <button type="submit" class="bg-fg text-bg text-sm font-medium rounded-lg px-4 py-2.5 hover:bg-neon transition">Aplicar</button>
+</form>
+{% else %}
+<div class="mb-4"></div>
+{% endif %}
+
+<!-- Resumo do período -->
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-2 animate-fade-in">
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">Entradas</span>
+        <p class="font-serif text-2xl font-bold mt-1 text-neon">R$ {{ total_entradas|floatformat:2 }}</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">Gastos</span>
+        <p class="font-serif text-2xl font-bold mt-1">R$ {{ total_gastos|floatformat:2 }}</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">Resultado</span>
+        <p class="font-serif text-2xl font-bold mt-1 {% if resultado < 0 %}text-red-400{% else %}text-neon{% endif %}">{% if resultado > 0 %}+{% endif %}R$ {{ resultado|floatformat:2 }}</p>
+    </div>
+    <div class="bg-card border border-borderdark rounded-2xl p-5">
+        <span class="text-xs uppercase tracking-wide text-muted">Gastos fixos</span>
+        <p class="font-serif text-2xl font-bold mt-1">R$ {{ total_fixos|floatformat:2 }}</p>
+        <p class="text-[11px] text-muted mt-0.5">Parcelas: R$ {{ total_parcelado|floatformat:2 }}</p>
+    </div>
+</div>
+<p class="text-xs text-muted mb-8">
+    {% if inicio and fim %}{{ inicio|date:"d/m/Y" }} até {{ fim|date:"d/m/Y" }}{% else %}Todo o histórico{% endif %}
+    {% if previsto_gastos %} · inclui R$ {{ previsto_gastos|floatformat:2 }} em gastos previstos (ainda não pagos){% endif %}
+</p>
+
+{% if linhas %}
+<div class="grid grid-cols-1 lg:grid-cols-5 gap-6 mb-6">
+    <!-- Gráfico -->
+    <div class="lg:col-span-2 bg-card border border-borderdark rounded-2xl p-6 animate-fade-in">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="font-serif text-lg font-semibold">Gastos por categoria</h2>
+            <div class="flex items-center gap-1 text-xs">
+                <button id="btn-pizza" onclick="mudarTipoGrafico('doughnut')" class="px-3 py-1 rounded-full bg-fg text-bg transition">Pizza</button>
+                <button id="btn-barra" onclick="mudarTipoGrafico('bar')" class="px-3 py-1 rounded-full bg-transparent border border-borderdark text-muted transition">Barras</button>
+            </div>
+        </div>
+        <canvas id="graficoCategoria" height="260"></canvas>
+    </div>
+
+    <!-- Tabela -->
+    <div class="lg:col-span-3 bg-card border border-borderdark rounded-2xl overflow-hidden animate-fade-in">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="text-left text-xs text-muted uppercase tracking-wide border-b border-borderdark">
+                    <th class="px-5 py-3 font-medium">Categoria</th>
+                    <th class="px-5 py-3 font-medium text-right">Total</th>
+                    <th class="px-5 py-3 font-medium text-right">%</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-borderdark">
+                {% for linha in linhas %}
+                <tr class="hover:bg-fg/[0.02] transition">
+                    <td class="px-5 py-3.5">
+                        <div class="flex items-center gap-2.5">
+                            <span class="h-2.5 w-2.5 rounded-full shrink-0" style="background-color: {{ linha.cor }};"></span>
+                            <span>{{ linha.icone }} {{ linha.nome }}</span>
+                        </div>
+                    </td>
+                    <td class="px-5 py-3.5 text-right font-medium">R$ {{ linha.total|floatformat:2 }}</td>
+                    <td class="px-5 py-3.5 text-right text-muted">{{ linha.percentual }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="bg-card border border-dashed border-borderdark rounded-2xl p-12 text-center mb-6">
+    <p class="text-muted text-sm">Nenhum gasto encontrado nesse período.</p>
+</div>
+{% endif %}
+
+<!-- Evolução mensal -->
+<div class="bg-card border border-borderdark rounded-2xl p-6 mb-6 animate-fade-in">
+    <h2 class="font-serif text-lg font-semibold mb-4">Evolução — últimos 6 meses</h2>
+    <canvas id="graficoEvolucao" height="90"></canvas>
+</div>
+
+<!-- Agrupamentos -->
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+    {% include "finance/partials/breakdown.html" with titulo="À vista × parcelado × fixo" linhas=por_modalidade vazio="Nenhum gasto no período." %}
+    {% include "finance/partials/breakdown.html" with titulo="Por forma de pagamento" linhas=por_forma vazio="Nenhum gasto no período." %}
+    {% include "finance/partials/breakdown.html" with titulo="Por cartão" linhas=por_cartao vazio="Nenhum gasto em cartão no período." %}
+    {% include "finance/partials/breakdown.html" with titulo="Entradas por tipo" linhas=por_tipo_entrada vazio="Nenhuma entrada no período." %}
+</div>
+
+<!-- Fixos ativos -->
+<div class="bg-card border border-borderdark rounded-2xl overflow-hidden">
+    <div class="flex items-center justify-between px-6 py-4 border-b border-borderdark">
+        <h2 class="font-serif text-lg font-semibold">Gastos fixos ativos</h2>
+        <span class="text-sm text-muted">R$ {{ total_mensal_fixos|floatformat:2 }}/mês · <a href="{% url 'finance' %}" class="hover:text-fg">gerenciar →</a></span>
+    </div>
+    <div class="divide-y divide-borderdark">
+        {% for r in gastos_fixos %}
+        <div class="flex items-center justify-between px-6 py-3 text-sm">
+            <span>{{ r.category.icon|default:"📌" }} {{ r.description|default:"(sem descrição)" }} <span class="text-xs text-muted">· dia {{ r.day_of_month }}{% if r.card %} · {{ r.card.name }}{% endif %}</span></span>
+            <span class="font-medium">R$ {{ r.value|floatformat:2 }}</span>
+        </div>
+        {% empty %}
+        <p class="px-6 py-6 text-sm text-muted">Nenhum gasto fixo ativo.</p>
+        {% endfor %}
+    </div>
+</div>
+
+{{ chart_categorias|json_script:"chart-categorias" }}
+{{ chart_evolucao|json_script:"chart-evolucao" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+    const categorias = JSON.parse(document.getElementById('chart-categorias').textContent);
+    const evolucao = JSON.parse(document.getElementById('chart-evolucao').textContent);
+    const ctx = document.getElementById('graficoCategoria');
+    const ctxEvolucao = document.getElementById('graficoEvolucao');
+    let grafico, graficoEvolucao, tipoAtual = 'doughnut';
+
+    function criarGrafico(tipo) {
+        tipoAtual = tipo;
+        if (grafico) grafico.destroy();
+        if (!ctx) return;
+        const texto = corDoTema('muted'), grade = corDoTema('border');
+        grafico = new Chart(ctx, {
+            type: tipo,
+            data: {
+                labels: categorias.labels,
+                datasets: [{
+                    data: categorias.valores,
+                    backgroundColor: categorias.cores,
+                    borderColor: corDoTema('card'),
+                    borderWidth: tipo === 'doughnut' ? 2 : 0,
+                    borderRadius: tipo === 'bar' ? 6 : 0,
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: tipo === 'doughnut',
+                        position: 'bottom',
+                        labels: { color: texto, boxWidth: 10, padding: 14, font: { family: 'Inter' } }
+                    },
+                },
+                scales: tipo === 'bar' ? {
+                    x: { ticks: { color: texto, font: { family: 'Inter' } }, grid: { color: grade } },
+                    y: { ticks: { color: texto, font: { family: 'Inter' } }, grid: { color: grade } }
+                } : {}
+            }
+        });
+    }
+
+    function criarEvolucao() {
+        if (graficoEvolucao) graficoEvolucao.destroy();
+        const texto = corDoTema('muted'), grade = corDoTema('border');
+        graficoEvolucao = new Chart(ctxEvolucao, {
+            type: 'bar',
+            data: {
+                labels: evolucao.labels,
+                datasets: [
+                    { label: 'Entradas', data: evolucao.entradas, backgroundColor: corDoTema('neon'), borderRadius: 6 },
+                    { label: 'Gastos', data: evolucao.gastos, backgroundColor: corDoTema('fg', 0.35), borderRadius: 6 },
+                ]
+            },
+            options: {
+                responsive: true,
+                plugins: { legend: { position: 'bottom', labels: { color: texto, boxWidth: 10, padding: 14, font: { family: 'Inter' } } } },
+                scales: {
+                    x: { ticks: { color: texto }, grid: { display: false } },
+                    y: { ticks: { color: texto }, grid: { color: grade } },
+                }
+            }
+        });
+    }
+
+    function mudarTipoGrafico(tipo) {
+        criarGrafico(tipo);
+        const ativo = 'px-3 py-1 rounded-full bg-fg text-bg transition';
+        const inativo = 'px-3 py-1 rounded-full bg-transparent border border-borderdark text-muted transition';
+        document.getElementById('btn-pizza').className = tipo === 'doughnut' ? ativo : inativo;
+        document.getElementById('btn-barra').className = tipo === 'bar' ? ativo : inativo;
+    }
+
+    if (ctx) { criarGrafico('doughnut'); }
+    criarEvolucao();
+    document.addEventListener('tema-alterado', () => { if (ctx) criarGrafico(tipoAtual); criarEvolucao(); });
+</script>
+{% endblock %}

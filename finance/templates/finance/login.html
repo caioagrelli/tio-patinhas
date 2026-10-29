@@ -1,0 +1,34 @@
+{% extends "finance/base_public.html" %}
+{% block title %}Entrar{% endblock %}
+
+{% block content %}
+<div class="bg-card border border-borderdark rounded-2xl p-8 sm:p-10">
+    <h1 class="font-serif text-3xl sm:text-4xl font-bold mb-2">Bem-vindo de volta</h1>
+    <p class="text-muted text-sm mb-8">Entre para ver seu saldo, gastos e cofrinhos.</p>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.username.id_for_label }}">Usuário</label>
+            {{ form.username }}
+        </div>
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.password.id_for_label }}">Senha</label>
+            {{ form.password }}
+        </div>
+
+        {% if form.non_field_errors %}
+            <p class="text-red-400 text-sm">{{ form.non_field_errors.0 }}</p>
+        {% endif %}
+
+        <button type="submit" class="w-full bg-fg text-bg font-medium rounded-lg py-2.5 mt-2 hover:bg-neon transition">
+            Entrar
+        </button>
+    </form>
+
+    <p class="text-sm text-muted mt-6 text-center">
+        Ainda não tem conta?
+        <a href="{% url 'registrar' %}" class="text-fg underline hover:text-neon transition">Criar conta</a>
+    </p>
+</div>
+{% endblock %}

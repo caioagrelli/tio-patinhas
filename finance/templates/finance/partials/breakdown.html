@@ -1,0 +1,19 @@
+{% comment %} Tabela de agrupamento com barra de percentual. Espera: titulo, linhas, vazio {% endcomment %}
+<div class="bg-card border border-borderdark rounded-2xl p-6">
+    <h2 class="font-serif text-lg font-semibold mb-4">{{ titulo }}</h2>
+    <div class="space-y-3.5">
+        {% for linha in linhas %}
+        <div>
+            <div class="flex items-center justify-between text-sm mb-1.5">
+                <span class="truncate">{% if linha.icone %}{{ linha.icone }} {% endif %}{{ linha.nome }}{% if linha.qtd %} <span class="text-xs text-muted">· {{ linha.qtd }} lanç.</span>{% endif %}</span>
+                <span class="shrink-0 ml-3"><span class="font-medium">R$ {{ linha.total|floatformat:2 }}</span> <span class="text-xs text-muted">{{ linha.percentual }}%</span></span>
+            </div>
+            <div class="progress-track w-full h-1.5">
+                <div class="progress-bar" style="width: {{ linha.percentual|stringformat:'s' }}%; background-color: {{ linha.cor }};"></div>
+            </div>
+        </div>
+        {% empty %}
+        <p class="text-sm text-muted">{{ vazio }}</p>
+        {% endfor %}
+    </div>
+</div>

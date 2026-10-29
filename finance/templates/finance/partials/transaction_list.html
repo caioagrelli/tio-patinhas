@@ -1,0 +1,96 @@
+{% comment %}
+Partial compartilhado entre as telas de Gastos e Entradas.
+Espera no contexto: lancamentos, filtro, period, total, tx_type,
+                    titulo, subtitulo, url_create, url_update_name, cor_valor
+{% endcomment %}
+{% load static %}
+
+<div class="flex flex-wrap items-center justify-between gap-4 mb-6 animate-fade-in">
+    <div>
+        <h1 class="font-serif text-3xl font-bold">{{ titulo }}</h1>
+        <p class="text-muted text-sm mt-1">{{ subtitulo }}</p>
+    </div>
+    <a href="{% url url_create %}" class="inline-flex items-center gap-2 bg-fg text-bg text-sm font-medium rounded-lg px-5 py-2.5 hover:bg-neon transition">
+        + {{ titulo_botao }}
+    </a>
+</div>
+
+<!-- Filtros: uma linha de seletores compactos que aplicam ao mudar -->
+<form method="get" id="filtros" class="flex flex-wrap items-center gap-2 mb-6">
+    <select name="period" class="filtro-select" onchange="this.form.requestSubmit()" aria-label="Período">
+        {% for valor, rotulo in periodos %}
+        <option value="{{ valor }}" {% if period == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+    </select>
+
+    {% if period == "personalizado" %}
+    <span class="flex items-center gap-1.5">
+        <input type="date" name="start_date" value="{{ request.GET.start_date }}" class="filtro-select" aria-label="De">
+        <span class="text-xs text-muted">até</span>
+        <input type="date" name="end_date" value="{{ request.GET.end_date }}" class="filtro-select" aria-label="Até">
+        <button type="submit" class="filtro-select !bg-fg !text-bg !border-fg">Aplicar</button>
+    </span>
+    {% endif %}
+
+    <select name="kind" class="filtro-select {% if kind %}ativo{% endif %}" onchange="this.form.requestSubmit()" aria-label="Modalidade">
+        <option value="">Todas as modalidades</option>
+        {% for valor, rotulo in modalidades %}
+        <option value="{{ valor }}" {% if kind == valor %}selected{% endif %}>{{ rotulo }}</option>
+        {% endfor %}
+    </select>
+
+    <select name="{{ filtro_param }}" class="filtro-select {% if filtro_valor %}ativo{% endif %}" onchange="this.form.requestSubmit()"
+            aria-label="{% if tx_type == 'income' %}Tipo de entrada{% else %}Categoria{% endif %}">
+        <option value="">{% if tx_type == "income" %}Todos os tipos{% else %}Todas as categorias{% endif %}</option>
+        {% for opcao in filtro_opcoes %}
+        <option value="{{ opcao.id }}" {% if filtro_valor == opcao.id|stringformat:'s' %}selected{% endif %}>{{ opcao.icon }} {{ opcao.name }}</option>
+        {% endfor %}
+    </select>
+
+    {% if kind or filtro_valor or period != "mes_atual" %}
+    <a href="?" class="text-xs text-muted hover:text-fg transition ml-1">Limpar filtros</a>
+    {% endif %}
+</form>
+
+<!-- Total do período filtrado -->
+<div class="bg-card border border-borderdark rounded-2xl p-6 mb-6 animate-fade-in">
+    <span class="text-xs uppercase tracking-wide text-muted">Total no período</span>
+    <p class="font-serif text-3xl font-bold mt-1 {{ cor_valor }}">R$ {{ total|floatformat:2 }}</p>
+    {% if total_previsto %}
+    <p class="text-xs text-muted mt-1">inclui R$ {{ total_previsto|floatformat:2 }} previsto(s) — ainda não {% if tx_type == "income" %}recebido(s){% else %}pago(s){% endif %}</p>
+    {% endif %}
+</div>
+
+<!-- Lista de lançamentos -->
+<div class="bg-card border border-borderdark rounded-2xl divide-y divide-borderdark overflow-hidden">
+    {% for lancamento in lancamentos %}
+    <div class="flex items-center justify-between gap-4 px-5 py-4 hover:bg-fg/[0.02] transition {% if not lancamento.applied %}opacity-70{% endif %}">
+        <div class="flex items-center gap-3 min-w-0">
+            <span class="text-xl shrink-0">{% if tx_type == "income" %}{{ lancamento.income_type.icon|default:"💵" }}{% else %}{{ lancamento.category.icon|default:"💳" }}{% endif %}</span>
+            <div class="min-w-0">
+                <p class="text-sm truncate flex items-center gap-2">
+                    <span class="truncate">{{ lancamento.description|default:"(sem descrição)" }}</span>
+                    {% if lancamento.installment_label %}<span class="shrink-0 text-[10px] uppercase tracking-wide rounded-full border border-borderdark px-2 py-0.5 text-muted">Parcela {{ lancamento.installment_label }}</span>{% endif %}
+                    {% if lancamento.kind == "fixo" %}<span class="shrink-0 text-[10px] uppercase tracking-wide rounded-full border border-borderdark px-2 py-0.5 text-muted">Fixo</span>{% endif %}
+                    {% if not lancamento.applied %}<span class="shrink-0 text-[10px] uppercase tracking-wide rounded-full bg-neon/15 text-neon px-2 py-0.5">Previsto</span>{% endif %}
+                </p>
+                <p class="text-xs text-muted truncate">
+                    {% if tx_type == "income" %}{{ lancamento.income_type.name|default:"Sem tipo" }}{% else %}{{ lancamento.category.name|default:"Sem categoria" }}{% endif %}
+                    · {{ lancamento.date|date:"d/m/Y" }}
+                    {% if lancamento.payment_method %} · {{ lancamento.payment_method.name }}{% endif %}
+                    {% if lancamento.card %} · {{ lancamento.card.name }}{% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="flex items-center gap-4 shrink-0">
+            <span class="text-sm font-medium {{ cor_valor }}">R$ {{ lancamento.value|floatformat:2 }}</span>
+            <div class="flex items-center gap-2 text-xs">
+                <a href="{% url url_update_name lancamento.pk %}" class="text-muted hover:text-fg transition">Editar</a>
+                <a href="{% url 'transaction_delete' lancamento.pk %}" class="text-muted hover:text-red-400 transition">Excluir</a>
+            </div>
+        </div>
+    </div>
+    {% empty %}
+    <div class="px-5 py-12 text-center text-sm text-muted">Nenhum lançamento encontrado para esse filtro.</div>
+    {% endfor %}
+</div>

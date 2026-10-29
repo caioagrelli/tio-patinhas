@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+*.sqlite3
+db.sqlite3
+staticfiles/
+media/
+.env
+venv/
+env/
+.vscode/
+.idea/
+*.log
+# Cópia duplicada antiga do projeto (não versionar)
+projets/

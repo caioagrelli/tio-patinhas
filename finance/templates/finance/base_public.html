@@ -1,0 +1,36 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    {% include "finance/partials/head.html" %}
+</head>
+<body class="bg-bg text-fg font-sans min-h-screen flex flex-col">
+
+    <!-- Logo simples no topo, sem navbar completa (telas de login/registro) -->
+    <header class="w-full px-6 py-6 flex items-center justify-between">
+        <a href="{% url 'login' %}" class="font-serif text-2xl font-bold tracking-tight">
+            💰 Tio Patinhas<span class="text-neon">.</span>
+        </a>
+        {% include "finance/partials/theme_toggle.html" %}
+    </header>
+
+    <main class="flex-1 flex items-center justify-center px-6 pb-16">
+        <div class="w-full max-w-md animate-fade-in">
+            {% if messages %}
+                <div class="mb-6 space-y-2">
+                    {% for message in messages %}
+                        <div class="rounded-lg border border-borderdark bg-card px-4 py-3 text-sm {% if message.tags == 'error' %}text-red-400{% else %}text-muted{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+
+    <footer class="text-center text-xs text-muted py-6 border-t border-borderdark">
+        <span class="font-serif text-fg font-semibold">💰 Tio Patinhas</span> — controle financeiro pessoal
+    </footer>
+</body>
+</html>

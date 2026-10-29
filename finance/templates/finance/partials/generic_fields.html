@@ -1,0 +1,33 @@
+{% comment %}
+Renderiza todos os campos de um form. O campo "card" só aparece quando a
+forma de pagamento escolhida é do tipo cartão. Espera: form, formas_cartao, tem_cartoes
+{% endcomment %}
+{% for erro in form.non_field_errors %}<p class="text-red-400 text-sm">{{ erro }}</p>{% endfor %}
+{% for campo in form %}
+<div {% if campo.name == "card" %}id="campo-cartao" class="hidden"{% endif %}>
+    {% if campo.field.widget.input_type == "checkbox" %}
+        <label class="flex items-center gap-2 text-sm" for="{{ campo.id_for_label }}">{{ campo }} {{ campo.label }}</label>
+    {% else %}
+        <label class="block text-sm text-muted mb-1.5" for="{{ campo.id_for_label }}">{{ campo.label }}</label>
+        {% if campo.name == "card" and not tem_cartoes %}
+            <p class="text-xs text-muted py-2.5">Nenhum cartão cadastrado. <a href="{% url 'settings_create' 'cartoes' %}" class="text-neon hover:underline">Cadastrar cartão</a></p>
+        {% else %}
+            {{ campo }}
+        {% endif %}
+    {% endif %}
+    {% if campo.help_text %}<p class="text-[11px] text-muted mt-1">{{ campo.help_text }}</p>{% endif %}
+    {% for erro in campo.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+</div>
+{% endfor %}
+{{ formas_cartao|json_script:"formas-cartao" }}
+<script>
+(function () {
+    const forma = document.querySelector('[data-payment-method]');
+    const cartao = document.getElementById('campo-cartao');
+    if (!forma || !cartao) return;
+    const formasCartao = JSON.parse(document.getElementById('formas-cartao').textContent).map(String);
+    const atualizar = () => cartao.classList.toggle('hidden', !formasCartao.includes(forma.value));
+    forma.addEventListener('change', atualizar);
+    atualizar();
+})();
+</script>

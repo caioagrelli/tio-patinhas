@@ -1,0 +1,47 @@
+{% extends "finance/base_public.html" %}
+{% block title %}Criar conta{% endblock %}
+
+{% block content %}
+<div class="bg-card border border-borderdark rounded-2xl p-8 sm:p-10">
+    <h1 class="font-serif text-3xl sm:text-4xl font-bold mb-2">Criar conta</h1>
+    <p class="text-muted text-sm mb-8">Leva menos de um minuto.</p>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.first_name.id_for_label }}">Nome</label>
+            {{ form.first_name }}
+            {% for erro in form.first_name.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+        </div>
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.username.id_for_label }}">Usuário</label>
+            {{ form.username }}
+            {% for erro in form.username.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+        </div>
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.email.id_for_label }}">E-mail</label>
+            {{ form.email }}
+            {% for erro in form.email.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+        </div>
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.password1.id_for_label }}">Senha</label>
+            {{ form.password1 }}
+            {% for erro in form.password1.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+        </div>
+        <div>
+            <label class="block text-sm text-muted mb-1.5" for="{{ form.password2.id_for_label }}">Confirmar senha</label>
+            {{ form.password2 }}
+            {% for erro in form.password2.errors %}<p class="text-red-400 text-xs mt-1">{{ erro }}</p>{% endfor %}
+        </div>
+
+        <button type="submit" class="w-full bg-fg text-bg font-medium rounded-lg py-2.5 mt-2 hover:bg-neon transition">
+            Criar conta
+        </button>
+    </form>
+
+    <p class="text-sm text-muted mt-6 text-center">
+        Já tem conta?
+        <a href="{% url 'login' %}" class="text-fg underline hover:text-neon transition">Entrar</a>
+    </p>
+</div>
+{% endblock %}
