@@ -2,7 +2,8 @@
 
 O site fica em `https://SEU_USUARIO.pythonanywhere.com`, sempre ligado, com o
 banco SQLite salvo no próprio servidor. No plano gratuito é preciso entrar no
-painel e clicar em **"Run until 3 months from today"** (aba Web) a cada 3 meses.
+painel **uma vez por mês** e clicar em **"Executar até 1 mês a partir de hoje"**
+(aba Web). O PythonAnywhere manda um e-mail uma semana antes de desativar.
 
 Em todos os comandos abaixo, troque `SEU_USUARIO` pelo seu usuário do PythonAnywhere.
 
