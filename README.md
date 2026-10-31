@@ -1,124 +1,104 @@
-# Tio Patinhas — Controle Financeiro Pessoal
+# Tio Patinhas — Controle Financeiro
 
-Sistema web em Django para controle financeiro pessoal: saldo (carteira), gastos e entradas, cofrinhos com metas, categorias e relatórios por categoria com gráfico. Visual dark mode minimalista (Tailwind CSS via CDN + Chart.js).
+Aplicação em **TypeScript**: NestJS, React/Vite, PostgreSQL e Prisma. Interface responsiva em português, com temas claro e escuro.
 
-## Requisitos
+## Iniciar com Docker
 
-- Python 3.11+ (funciona também em 3.10/3.12)
-- pip
+Requisitos: Docker Engine com Docker Compose v2.
 
-## Instalação
-
-```bash
-# 1. Entre na pasta do projeto
-cd controle_financeiro
-
-# 2. Crie e ative um ambiente virtual
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-
-# 3. Instale as dependências
-pip install -r requirements.txt
-
-# 4. Aplique as migrations
-python manage.py migrate
+```sh
+cp .env.example .env
+# Edite POSTGRES_PASSWORD e a mesma senha em DATABASE_URL.
+docker compose up --build -d
 ```
 
-O passo 4 já cria automaticamente as **7 categorias padrão** (Alimentação, Transporte, Lazer, Moradia, Saúde, Educação, Outros) através de uma *data migration* (`finance/migrations/0002_categorias_padrao.py`) — não é preciso rodar nada além do `migrate`. Se preferir carregá-las manualmente a partir do fixture incluído, também funciona:
+Acesse **http://localhost:8080** e crie uma conta. O container aplica as migrations antes de iniciar. O PostgreSQL persiste no volume `postgres-data`; `docker compose down` preserva esse volume. `docker compose logs -f app` mostra os logs.
 
-```bash
-python manage.py loaddata categorias_padrao
+## Desenvolvimento local
+
+Node.js **22.13+ (linha 22)** e npm. Docker é necessário para o PostgreSQL e para Testcontainers.
+
+```sh
+cp .env.example .env
+npm ci
+docker compose up -d db
+npm run db:generate
+npm run db:migrate
+npm run dev
 ```
 
-## Criar um usuário administrador (opcional, para acessar `/admin/`)
+Interface: http://localhost:5173. API: http://localhost:3000/api. O Vite encaminha `/api` ao NestJS. Em produção, o NestJS serve também a interface compilada; não há necessidade de dois servidores públicos.
 
-```bash
-python manage.py createsuperuser
+Se não houver Docker Compose, inicie apenas o PostgreSQL com Docker:
+
+```sh
+docker run -d --name tio-patinhas-dev-db --env-file .env \
+  -p 127.0.0.1:5432:5432 \
+  -v tio-patinhas-dev-postgres:/var/lib/postgresql/data \
+  --restart unless-stopped postgres:17-alpine
+npm run db:generate
+npm run db:migrate
+npm run dev
 ```
 
-## Rodar o servidor
+O volume `tio-patinhas-dev-postgres` guarda os dados entre reinícios. Use `docker stop tio-patinhas-dev-db` para parar e `docker start tio-patinhas-dev-db` para retomar. Escolha uma das formas de iniciar o banco, pois ambas usam a porta 5432. Cada forma tem seu próprio volume de dados.
 
-```bash
-python manage.py runserver
-```
-
-Acesse **http://127.0.0.1:8000/** — a própria raiz do site já é a tela de login. Clique em "Criar conta" para se cadastrar (isso já cria seu usuário, sua carteira com saldo zerado e faz login automaticamente).
-
-## Rodar os testes automatizados
-
-```bash
-python manage.py test
-```
-
-15 testes cobrem: criação automática da carteira, isolamento entre usuários, atualização de saldo em gastos/entradas (criar/editar/excluir), depósito e resgate em cofrinhos (incluindo bloqueio de saldo insuficiente), exclusão de cofrinho devolvendo o valor guardado, e regras de categoria (padrão vs. do usuário).
-
-## Estrutura do projeto
-
-```
-controle_financeiro/
-├── manage.py
-├── requirements.txt
-├── config/                  # settings, urls raiz, wsgi/asgi
-├── static/css/style.css     # pequenos ajustes que o Tailwind CDN não cobre
-└── finance/                 # app principal
-    ├── models.py            # Wallet, Category, SavingsBox, SavingsMovement, Transaction
-    ├── signals.py           # cria a Wallet automaticamente ao registrar usuário
-    ├── context_processors.py# alerta no topo (ex: "meta do cofrinho atingida")
-    ├── forms.py
-    ├── views.py
-    ├── urls.py
-    ├── admin.py
-    ├── tests.py
-    ├── fixtures/categorias_padrao.json
-    ├── migrations/
-    │   ├── 0001_initial.py
-    │   └── 0002_categorias_padrao.py   # seed das categorias padrão
-    └── templates/finance/
-        ├── base.html            # layout autenticado (navbar + faixa de alerta + footer)
-        ├── base_public.html     # layout das telas de login/registro
-        ├── login.html / register.html
-        ├── dashboard.html
-        ├── expense_list.html / expense_form.html
-        ├── income_list.html / income_form.html
-        ├── transaction_confirm_delete.html
-        ├── savingsbox_list.html / savingsbox_form.html / savingsbox_movement.html / savingsbox_confirm_delete.html
-        ├── category_list.html / category_form.html / category_confirm_delete.html
-        ├── reports.html         # Chart.js + tabela, alimentados por agregação no backend
-        └── partials/            # trechos reaproveitados entre telas de gasto/entrada
+```sh
+npm run build
+npm start
 ```
 
 ## Funcionalidades
 
-- **Login/registro/logout** com `django.contrib.auth`. A raiz (`/`) é a tela de login; após autenticar, o usuário vai para `/dashboard/`. Todo dado é filtrado por `request.user` — um usuário nunca vê dados de outro (testado em `finance/tests.py`).
-- **Carteira (Wallet)**: saldo único por usuário, criado automaticamente no cadastro (via signal `post_save` no `User`) e atualizado a cada gasto, entrada, depósito ou resgate.
-- **Cofrinhos (SavingsBox)**: múltiplos cofrinhos com nome, ícone, cor e meta opcional. Depositar debita da carteira e credita no cofrinho; resgatar faz o caminho inverso; excluir devolve o valor guardado para a carteira. Ao atingir a meta, aparece um aviso na faixa neon no topo (via `context_processors.py`) e um selo "Meta atingida" nos cards.
-- **Categorias**: 7 categorias padrão do sistema (comuns a todos os usuários, não editáveis) + categorias próprias de cada usuário (editáveis/excluíveis). Excluir uma categoria não apaga os lançamentos — eles ficam "sem categoria" (`on_delete=SET_NULL`).
-- **Gastos e Entradas**: CRUD completo (`Transaction` com `type=income/expense`), com filtro por período (mês atual / últimos 30 dias / todo o período / intervalo customizado) e por categoria, usando chips/pills.
-- **Relatórios**: agregação de gastos por categoria feita 100% no banco com `values().annotate(Sum(...))` (sem API externa), com total, percentual por categoria e gráfico (pizza/barras alternável) via Chart.js.
+- Cadastro, login e logout com sessões revogáveis no banco e cookie HttpOnly/SameSite.
+- Carteira; criação, edição, exclusão e filtros de entradas e saídas.
+- Lançamentos futuros só afetam o saldo quando chega a data, no próximo acesso autenticado.
+- Parcelamentos mensais com distribuição exata de centavos; excluir o plano reverte as parcelas realizadas.
+- Recorrências mensais desde o início, com fim opcional, pausa e edição. Excluir uma recorrência preserva o histórico; alterações valem para meses ainda não gerados. Excluir um lançamento gerado não o recria.
+- Cofrinhos com meta, depósitos, resgates, histórico e aviso de meta persistente. Excluir devolve o dinheiro para a carteira.
+- Categorias padrão protegidas e cadastros próprios: categorias, cartões, formas de pagamento e tipos de entrada.
+- Ciclo de fatura e limite comprometido com parcelas futuras; projeção de seis meses.
+- Relatórios por período/categoria com barras ou pizza. Relatórios incluem previstos; os indicadores do mês na visão geral incluem realizados.
 
-## Trocando para PostgreSQL em produção
+O processamento de vencimentos ocorre no acesso à aplicação. As configurações permitem gerenciar os cadastros financeiros.
 
-Instale o driver:
+## Testes
 
-```bash
-pip install psycopg2-binary
+```sh
+npm run typecheck
+npm test                    # Jest + fast-check (2.000 cenários de parcelamento)
+npm run test:integration    # Supertest + Testcontainers + PostgreSQL real
+npm run test:coverage       # unitários + integração, relatório HTML/lcov
+npx playwright install --with-deps chromium
+npm run test:e2e            # Playwright: desktop e celular; axe para acessibilidade
 ```
 
-E troque o bloco `DATABASES` em `config/settings.py` por:
+Testcontainers sobe um PostgreSQL temporário, aplica as migrations e remove o container no final. Cada execução usa um schema aleatório: **os testes não usam DATABASE_URL nem apagam o banco da aplicação**. Opcionalmente, forneça `TEST_DATABASE_URL` de um servidor de testes: o schema continua isolado. O comando de navegador também prepara um banco isolado, compila a aplicação e abre um servidor temporário na porta 3100.
 
-```python
-import os
+Os testes de integração cobrem autenticação, CSRF, validação, isolamento entre usuários, saldo, rollback, depósitos simultâneos, parcelas, recorrências, cartões, projeções e relatórios. Playwright guarda trace, vídeo e captura em caso de falha. Relatórios: `coverage/index.html` e `playwright-report/index.html`.
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("DB_NAME", "controle_financeiro"),
-        "USER": os.environ.get("DB_USER", "postgres"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", ""),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "5432"),
-    }
-}
+Para usar o Chrome já instalado, defina `PLAYWRIGHT_CHROME_PATH=/usr/bin/google-chrome`. Para testar um ambiente dedicado já iniciado, defina `PLAYWRIGHT_BASE_URL`; nesse modo o runner não prepara nem limpa o banco remoto e os testes criam contas nesse ambiente.
+
+### Testes totalmente em Docker
+
+```sh
+docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from tests tests
+docker compose -f compose.test.yaml up --build --abort-on-container-exit --exit-code-from e2e e2e
+docker compose -f compose.test.yaml down
 ```
 
-Lembre-se também de, em produção: definir `DEBUG = False`, gerar uma nova `SECRET_KEY` (e carregá-la de variável de ambiente), ajustar `ALLOWED_HOSTS`, e rodar `python manage.py collectstatic`.
+O ambiente de testes usa banco em `tmpfs` e não compartilha os volumes da aplicação. No GitHub Actions, a pipeline executa tipagem, cobertura, testes no navegador e build da imagem.
+
+## Organização
+
+```text
+server/src/           API NestJS, autenticação e regras financeiras
+web/src/              interface React e estilos
+shared/               validação Zod compartilhada
+prisma/               schema PostgreSQL e migrations versionadas
+tests/unit/           regras e testes de propriedades
+tests/integration/    API com banco real
+tests/e2e/            fluxos no navegador e acessibilidade
+```
+
+Todos os valores monetários da API são **centavos inteiros** (R$ 10,50 = `1050`), armazenados como `BIGINT`. As operações que alteram dinheiro usam transações e bloqueio da linha do usuário no PostgreSQL, inclusive entre múltiplas instâncias. Datas financeiras usam `YYYY-MM-DD` e o dia civil de Recife. Consulte [DEPLOY.md](DEPLOY.md) para publicação e backups.

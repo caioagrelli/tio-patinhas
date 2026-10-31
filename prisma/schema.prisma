@@ -1,0 +1,171 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+model User {
+  id String @id @default(uuid())
+  username String @unique
+  name String
+  passwordHash String
+  active Boolean @default(true)
+  balance BigInt @default(0)
+  createdAt DateTime @default(now())
+  sessions Session[]
+  categories Category[]
+  paymentMethods PaymentMethod[]
+  cards Card[]
+  incomeTypes IncomeType[]
+  transactions Transaction[]
+  boxes SavingsBox[]
+  recurrences Recurrence[]
+  plans InstallmentPlan[]
+}
+model Session {
+  tokenHash String @id
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  @@index([expiresAt])
+}
+model Category {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  color String @default("#d4ff3f")
+  icon String @default("💰")
+  isDefault Boolean @default(false)
+  transactions Transaction[]
+  recurrences Recurrence[]
+  plans InstallmentPlan[]
+  @@index([userId])
+}
+model PaymentMethod {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  icon String @default("💳")
+  kind String
+  transactions Transaction[]
+  recurrences Recurrence[]
+  plans InstallmentPlan[]
+  @@index([userId])
+}
+model Card {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  color String @default("#d4ff3f")
+  limit BigInt?
+  closingDay Int?
+  dueDay Int?
+  transactions Transaction[]
+  recurrences Recurrence[]
+  plans InstallmentPlan[]
+  @@index([userId])
+}
+model IncomeType {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  icon String @default("💵")
+  color String @default("#d4ff3f")
+  transactions Transaction[]
+  recurrences Recurrence[]
+  @@index([userId])
+}
+model Transaction {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type String
+  kind String @default("avista")
+  value BigInt
+  description String @default("")
+  date String
+  applied Boolean @default(false)
+  categoryId String?
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  paymentMethodId String?
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  cardId String?
+  card Card? @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  incomeTypeId String?
+  incomeType IncomeType? @relation(fields: [incomeTypeId], references: [id], onDelete: SetNull)
+  recurrenceId String?
+  recurrence Recurrence? @relation(fields: [recurrenceId], references: [id], onDelete: SetNull)
+  planId String?
+  plan InstallmentPlan? @relation(fields: [planId], references: [id], onDelete: Cascade)
+  installmentNumber Int?
+  createdAt DateTime @default(now())
+  @@index([userId, date])
+  @@unique([recurrenceId, date])
+}
+model SavingsBox {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name String
+  amount BigInt @default(0)
+  goal BigInt?
+  icon String @default("🐷")
+  color String @default("#d4ff3f")
+  goalAlertDismissed Boolean @default(false)
+  movements SavingsMovement[]
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+model SavingsMovement {
+  id String @id @default(uuid())
+  boxId String
+  box SavingsBox @relation(fields: [boxId], references: [id], onDelete: Cascade)
+  type String
+  value BigInt
+  createdAt DateTime @default(now())
+}
+model Recurrence {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type String
+  value BigInt
+  description String @default("")
+  categoryId String?
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  incomeTypeId String?
+  incomeType IncomeType? @relation(fields: [incomeTypeId], references: [id], onDelete: SetNull)
+  paymentMethodId String?
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  cardId String?
+  card Card? @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  dayOfMonth Int
+  startDate String
+  endDate String?
+  active Boolean @default(true)
+  lastGenerated String?
+  transactions Transaction[]
+  @@index([userId])
+}
+model InstallmentPlan {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  description String @default("")
+  totalValue BigInt
+  installments Int
+  firstDate String
+  categoryId String?
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  paymentMethodId String?
+  paymentMethod PaymentMethod? @relation(fields: [paymentMethodId], references: [id], onDelete: SetNull)
+  cardId String?
+  card Card? @relation(fields: [cardId], references: [id], onDelete: SetNull)
+  transactions Transaction[]
+  @@index([userId])
+}

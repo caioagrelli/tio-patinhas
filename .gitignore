@@ -1,14 +1,15 @@
-__pycache__/
-*.py[cod]
 *.sqlite3
 db.sqlite3
-staticfiles/
-media/
 .env
-venv/
-env/
 .vscode/
 .idea/
 *.log
-# Cópia duplicada antiga do projeto (não versionar)
-projets/
+node_modules/
+dist/
+web-dist/
+coverage/
+playwright-report/
+test-results/
+.env.*
+!.env.example
+*.sqlite3-*

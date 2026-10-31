@@ -1,102 +1,39 @@
-# Deploy gratuito no PythonAnywhere
+# Publicação com Docker
 
-O site fica em `https://SEU_USUARIO.pythonanywhere.com`, sempre ligado, com o
-banco SQLite salvo no próprio servidor. No plano gratuito é preciso entrar no
-painel **uma vez por mês** e clicar em **"Executar até 1 mês a partir de hoje"**
-(aba Web). O PythonAnywhere manda um e-mail uma semana antes de desativar.
+O sistema exige Node.js/PostgreSQL ou uma hospedagem com Docker.
 
-Em todos os comandos abaixo, troque `SEU_USUARIO` pelo seu usuário do PythonAnywhere.
+## Servidor
 
-## 1. Criar a conta
+1. Instale Docker Engine e Compose v2 no servidor.
+2. Copie o repositório, execute `cp .env.example .env` e configure uma senha forte em `POSTGRES_PASSWORD` e `DATABASE_URL`. Para evitar escape de caracteres na URL, gere uma senha hexadecimal com `openssl rand -hex 32`.
+3. Configure `COOKIE_SECURE=true` para o domínio publicado por HTTPS. Para testar em `localhost` por HTTP, mantenha `false`.
+4. Execute `docker compose up --build -d`.
+5. Configure um proxy HTTPS (por exemplo, Caddy ou nginx) para `127.0.0.1:8080`. API e interface devem compartilhar a mesma origem. O aplicativo não habilita CORS.
 
-1. Acesse <https://www.pythonanywhere.com> → **Pricing & signup** → **Create a Beginner account** (grátis).
-2. O nome de usuário escolhido vira o endereço do site.
+A porta do app e a do banco estão vinculadas a localhost. Em produção, remova a publicação `ports` do serviço `db` se não precisar de acesso local. Não exponha o PostgreSQL à internet.
 
-## 2. Baixar o código (console Bash)
+## Atualizar
 
-No painel, aba **Consoles** → **Bash**:
+Faça backup antes de atualizar. Depois de baixar a nova versão:
 
-```bash
-git clone https://github.com/caioagrelli/tio-patinhas.git
-cd tio-patinhas
+```sh
+docker compose up --build -d
+docker compose ps
+docker compose logs --tail 100 app
 ```
 
-## 3. Ambiente virtual e dependências
+O container aplica migrations versionadas com `prisma migrate deploy`. Falhas impedem o início do aplicativo. Crie mudanças de schema em desenvolvimento com `npm run db:dev -- --name descricao` e versione o SQL gerado. Não use `db push` em produção.
 
-Ainda no console (use a versão de Python mais nova que aparecer na aba Web, ex: 3.13):
+## Backup e recuperação
 
-```bash
-mkvirtualenv --python=python3.13 tio-patinhas
-pip install -r requirements.txt
+```sh
+docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Fc' > backup.dump
 ```
 
-> Se fechar o console, reative depois com `workon tio-patinhas`.
+Teste a restauração em um ambiente separado e vazio antes de depender do backup:
 
-## 4. Configurar as variáveis (.env)
-
-```bash
-cp .env.example .env
-python -c "import secrets; print(secrets.token_urlsafe(50))"   # copie a chave gerada
-nano .env
+```sh
+docker compose exec -T db sh -c 'pg_restore -U "$POSTGRES_USER" -d "$POSTGRES_DB" --no-owner --exit-on-error' < backup.dump
 ```
 
-No `nano`, cole a chave em `DJANGO_SECRET_KEY` e troque `SEU_USUARIO` em
-`DJANGO_ALLOWED_HOSTS`. Salve com `Ctrl+O`, `Enter`, e saia com `Ctrl+X`.
-
-## 5. Banco de dados e arquivos estáticos
-
-```bash
-python manage.py migrate
-python manage.py collectstatic --noinput
-python manage.py createsuperuser    # opcional: acesso ao /admin/
-```
-
-## 6. Criar o site (aba Web)
-
-1. **Add a new web app** → **Next** → **Manual configuration** (não escolha "Django") → mesma versão de Python do passo 3.
-2. Na página do app, preencha:
-   - **Source code:** `/home/SEU_USUARIO/tio-patinhas`
-   - **Virtualenv:** `/home/SEU_USUARIO/.virtualenvs/tio-patinhas`
-3. Clique no link do **WSGI configuration file**, apague tudo e cole:
-
-   ```python
-   import os
-   import sys
-
-   path = "/home/SEU_USUARIO/tio-patinhas"
-   if path not in sys.path:
-       sys.path.insert(0, path)
-
-   os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
-
-   from django.core.wsgi import get_wsgi_application
-   application = get_wsgi_application()
-   ```
-
-   Clique em **Save**.
-4. Em **Security**, ligue **Force HTTPS**.
-5. Clique no botão verde **Reload** no topo.
-
-Pronto: abra `https://SEU_USUARIO.pythonanywhere.com` e crie sua conta.
-
-## Atualizar depois de mudanças
-
-Envie as mudanças para o GitHub (`git push`) e, no console Bash do PythonAnywhere:
-
-```bash
-workon tio-patinhas
-cd ~/tio-patinhas && ./atualizar.sh
-```
-
-Depois clique em **Reload** na aba Web.
-
-## Backup dos dados
-
-Os dados ficam em `/home/SEU_USUARIO/tio-patinhas/db.sqlite3`. Para fazer
-backup, baixe esse arquivo pela aba **Files**.
-
-## Se algo der errado
-
-- Aba **Web** → **Error log** (no fim da página) mostra o erro.
-- "DisallowedHost": confira `DJANGO_ALLOWED_HOSTS` no `.env` e dê Reload.
-- Página sem estilo: rode `python manage.py collectstatic --noinput` e dê Reload.
+Guarde backups fora do servidor. `docker compose down` preserva os dados; **`docker compose down -v` apaga o volume do PostgreSQL**.

@@ -1,0 +1,69 @@
+{
+  "name": "tio-patinhas",
+  "version": "2.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13 <23"
+  },
+  "scripts": {
+    "dev": "concurrently -k \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "tsx watch server/src/main.ts",
+    "dev:web": "vite --host 0.0.0.0",
+    "build": "prisma generate && tsc -p tsconfig.server.json && vite build",
+    "start": "node dist/server/src/main.js",
+    "typecheck": "tsc --noEmit -p tsconfig.server.json && tsc --noEmit -p tsconfig.web.json && tsc -p tsconfig.tools.json",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "db:dev": "prisma migrate dev",
+    "test": "jest --runInBand --testPathPatterns=unit",
+    "test:integration": "jest --runInBand --testPathPatterns=integration",
+    "test:coverage": "jest --runInBand --coverage",
+    "test:e2e": "tsx tests/run-e2e.ts",
+    "test:all": "npm run typecheck && npm test && npm run test:integration && npm run test:e2e"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/throttler": "^6.4.0",
+    "@prisma/client": "6.19.0",
+    "cookie-parser": "^1.4.7",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "helmet": "^8.1.0",
+    "prisma": "6.19.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "^4.10.2",
+    "@nestjs/testing": "^11.1.6",
+    "@playwright/test": "1.56.1",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@types/cookie-parser": "^1.4.9",
+    "@types/express": "^5.0.3",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^22.18.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@types/supertest": "^6.0.3",
+    "@vitejs/plugin-react": "^5.0.4",
+    "concurrently": "^9.2.1",
+    "fast-check": "^4.3.0",
+    "jest": "^30.2.0",
+    "playwright-core": "1.56.1",
+    "supertest": "^7.1.4",
+    "ts-jest": "^29.4.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.1.12"
+  },
+  "overrides": {
+    "multer": "^2.5.0",
+    "deepmerge-ts": "^8.0.2",
+    "effect": "^3.20.0"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "CommonJS", "moduleResolution": "Node", "outDir": "dist",
+    "strict": true, "esModuleInterop": true, "experimentalDecorators": true, "emitDecoratorMetadata": true,
+    "skipLibCheck": true, "sourceMap": true, "resolveJsonModule": true
+  },
+  "include": ["server/src/**/*.ts", "shared/**/*.ts"], "exclude": ["node_modules", "dist"]
+}
