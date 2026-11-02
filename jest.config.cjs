@@ -3,6 +3,8 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/tests'],
   testMatch: ['**/*.spec.ts'],
+  // Browser tests run with Playwright (npm run test:e2e), not Jest.
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/tests/e2e/'],
   testTimeout: 120000,
   transform: { '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.server.json' }] },
   collectCoverageFrom: ['server/src/**/*.ts', 'shared/**/*.ts'],
