@@ -17,6 +17,8 @@ jobs:
       - run: npm ci
       - run: npm run db:generate
       - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
       - run: npm run test:coverage
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e
@@ -33,4 +35,4 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - run: docker build --target runtime -t tio-patinhas:ci .
+      - run: docker build --target runtime -t crab-finance:ci .

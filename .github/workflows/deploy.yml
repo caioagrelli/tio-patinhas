@@ -1,0 +1,64 @@
+name: Deploy
+# Publica no servidor quando o CI passa na branch main (ou manualmente em Actions > Deploy > Run workflow).
+on:
+  workflow_run:
+    workflows: ['TypeScript, integração e navegador']
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Em Settings > Environments > production dá para exigir aprovação antes de publicar.
+    environment: production
+    steps:
+      - name: Versão a publicar
+        run: |
+          sha="${{ github.event.workflow_run.head_sha || github.sha }}"
+          echo "SHA=$sha" >> "$GITHUB_ENV"
+          echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY,,}:$sha" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SHA }}
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: runtime
+          push: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Acesso SSH ao servidor
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+      - name: Publicar
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/crab-finance' }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ssh_cmd="ssh -i $HOME/.ssh/deploy"
+          $ssh_cmd "$TARGET" "mkdir -p '$DEPLOY_PATH'"
+          scp -i ~/.ssh/deploy -r compose.yaml compose.prod.yaml deploy "$TARGET:$DEPLOY_PATH/"
+          # The registry token only lives for this job; the server logs out right after pulling.
+          printf '%s' "$GHCR_TOKEN" | $ssh_cmd "$TARGET" "docker login ghcr.io -u '${{ github.actor }}' --password-stdin"
+          $ssh_cmd "$TARGET" "cd '$DEPLOY_PATH' && ./deploy/deploy.sh '$IMAGE'; status=\$?; docker logout ghcr.io >/dev/null; exit \$status"

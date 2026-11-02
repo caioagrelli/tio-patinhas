@@ -1,0 +1,8 @@
+dist
+web-dist
+coverage
+playwright-report
+test-results
+package-lock.json
+prisma/migrations
+*.md

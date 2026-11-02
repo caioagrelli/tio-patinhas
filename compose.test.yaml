@@ -7,7 +7,7 @@ services:
       POSTGRES_PASSWORD: test
     tmpfs: /var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U test -d patinhas_test"]
+      test: ['CMD-SHELL', 'pg_isready -U test -d patinhas_test']
       interval: 2s
       timeout: 3s
       retries: 30
@@ -26,7 +26,7 @@ services:
       target: runtime
     environment:
       DATABASE_URL: postgresql://test:test@db-test:5432/patinhas_test?schema=e2e
-      COOKIE_SECURE: "false"
+      COOKIE_SECURE: 'false'
     depends_on:
       db-test:
         condition: service_healthy
@@ -36,7 +36,7 @@ services:
       dockerfile: Dockerfile.e2e
     environment:
       PLAYWRIGHT_BASE_URL: http://app-test:3000
-      CI: "true"
+      CI: 'true'
     depends_on:
       app-test:
         condition: service_healthy

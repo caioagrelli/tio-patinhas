@@ -1,0 +1,81 @@
+# Produção: docker compose -f compose.yaml -f compose.prod.yaml up -d
+# Acrescenta HTTPS (Caddy), Redis para os limites compartilhados e o backup diário.
+# Mais servidores do app: docker compose -f compose.yaml -f compose.prod.yaml up -d --scale app=3
+services:
+  db:
+    ports: !reset []
+  migrate:
+    image: ${APP_IMAGE:-crab-finance:local}
+  app:
+    image: ${APP_IMAGE:-crab-finance:local}
+    # Sem porta publicada: só o Caddy fala com o app, o que permite vários containers.
+    ports: !reset []
+    environment:
+      COOKIE_SECURE: 'true'
+      APP_URL: https://${DOMAIN:?Defina DOMAIN no .env}
+      REDIS_URL: redis://redis:6379
+      # 1 = só o Caddy na frente; 2 = Cloudflare com proxy (nuvem laranja) + Caddy.
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+  redis:
+    image: redis:7-alpine
+    # Só contadores de tentativas: nada para persistir em disco.
+    command:
+      ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '64mb', '--maxmemory-policy', 'volatile-ttl']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Defina ACME_EMAIL no .env}
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp'
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    restart: unless-stopped
+  backup:
+    build: ./deploy/backup
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER:-patinhas}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-patinhas}
+      BACKUP_PASSPHRASE: ${BACKUP_PASSPHRASE:?Defina BACKUP_PASSPHRASE no .env}
+      BACKUP_TIME: ${BACKUP_TIME:-06:00}
+      BACKUP_ON_START: ${BACKUP_ON_START:-false}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-30}
+      BACKUP_REMOTE: ${BACKUP_REMOTE:-}
+      BACKUP_HEALTHCHECK_URL: ${BACKUP_HEALTHCHECK_URL:-}
+      # Armazenamento S3 compatível (Cloudflare R2, Backblaze B2, AWS S3) chamado "offsite" no rclone.
+      RCLONE_CONFIG_OFFSITE_TYPE: s3
+      RCLONE_CONFIG_OFFSITE_PROVIDER: ${BACKUP_S3_PROVIDER:-Cloudflare}
+      RCLONE_CONFIG_OFFSITE_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      RCLONE_CONFIG_OFFSITE_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      RCLONE_CONFIG_OFFSITE_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      RCLONE_CONFIG_OFFSITE_REGION: ${BACKUP_S3_REGION:-auto}
+      RCLONE_CONFIG_OFFSITE_NO_CHECK_BUCKET: 'true'
+    volumes:
+      - backups:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+volumes:
+  caddy-data:
+  caddy-config:
+  backups:

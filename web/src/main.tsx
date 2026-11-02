@@ -1,151 +1,408 @@
-import { StrictMode, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, ApiError, brl, cents, decimal, displayDate, localDate } from './api';
-import type { Box, Catalog, Dashboard, Named, Plan, Recurrence, Report, Transaction, User } from './types';
+import { api, ApiError } from './api';
+import { Auth } from './login';
+import type { Catalog, Dashboard, User } from './types';
+import { planName } from '../../shared/plans';
+import { App, parseRoute, href, useData, useApp, type Flash, type Route } from './ui';
+import { DashboardPage } from './pages/dashboard';
+import { TransactionDelete, TransactionForm, TransactionList } from './pages/transactions';
+import { BoxDelete, BoxForm, BoxList, BoxMovement } from './pages/boxes';
+import { FinancePage, PlanDelete, PlanForm, RecurrenceDelete, RecurrenceForm } from './pages/finance';
+import { ReportsPage } from './pages/reports';
+import { SettingsDelete, SettingsForm, SettingsPage } from './pages/settings';
+import { AdminPage, AdminUser } from './pages/admin';
+import { CrabAiPage } from './pages/crab-ai';
+import { accessLabel, CheckoutPage, PlansPage, ResultPage, trialText } from './pages/plans';
 import './style.css';
 
-type Page = 'dashboard' | 'expenses' | 'incomes' | 'boxes' | 'finance' | 'reports' | 'settings';
-const navigation: [Page, string][] = [['dashboard', 'Visão geral'], ['expenses', 'Saídas'], ['incomes', 'Entradas'], ['boxes', 'Cofrinhos'], ['finance', 'Planejamento'], ['reports', 'Relatórios'], ['settings', 'Configurações']];
-type Editor = { type: 'transaction'; row?: Transaction; direction: 'income' | 'expense' } | { type: 'box'; row?: Box } | { type: 'movement'; row: Box; direction: 'deposit' | 'withdraw' } | { type: 'resource'; resource: string; row?: Named } | { type: 'recurrence'; row: Recurrence } | { type: 'plan'; row: Plan };
-const emptyCatalog: Catalog = { categories: [], paymentMethods: [], cards: [], incomeTypes: [] };
-const text = (f: FormData, key: string) => String(f.get(key) ?? '');
-const ref = (f: FormData, key: string) => text(f, key) || null;
+// Same menu as the Django app; "Configurações" is the gear button.
+const menu: [string, string, string[], string][] = [
+  ['dashboard', 'Dashboard', ['', 'dashboard'], 'M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z'],
+  ['gastos', 'Gastos', ['gastos'], 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 16V8M8.5 11.5 12 8l3.5 3.5'],
+  ['entradas', 'Entradas', ['entradas'], 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 8v8M8.5 12.5 12 16l3.5-3.5'],
+  ['financas', 'Finanças', ['financas'], 'M3 3v18h18M7 15l4-4 3 3 6-7'],
+  [
+    'cofrinhos',
+    'Cofrinhos',
+    ['cofrinhos'],
+    'M4 7h15a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 7l2-3h10l2 3M15.5 13.5h.01',
+  ],
+  ['relatorios', 'Relatórios', ['relatorios'], 'M5 20V11M12 20V5M19 20v-6M3 20h18'],
+];
+// Hashes used before the pages mirrored the Django URLs.
+const legacy: Record<string, string> = {
+  expenses: 'gastos',
+  incomes: 'entradas',
+  boxes: 'cofrinhos',
+  finance: 'financas',
+  reports: 'relatorios',
+  settings: 'configuracoes',
+};
 
-function Field({ label, children }: { label: string; children: ReactNode }) { return <label className="field"><span>{label}</span>{children}</label>; }
-function Money({ label = 'Valor (R$)', name = 'value', value, required = true }: { label?: string; name?: string; value?: number | null; required?: boolean }) {
-  return <Field label={label}><input name={name} type="number" inputMode="decimal" min="0.01" max="9999999999.99" step="0.01" required={required} defaultValue={decimal(value)} placeholder="0,00" /></Field>;
+// Sun shows in the dark theme (switch to light), moon in the light theme; CSS cross-fades them.
+function ThemeIcon() {
+  return (
+    <span className="theme-icon" aria-hidden="true">
+      <svg className="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+        <circle cx="12" cy="12" r="4.2" fill="currentColor" stroke="none" />
+        {[0, 45, 90, 135, 180, 225, 270, 315].map(a => (
+          <line key={a} x1="12" y1="2.6" x2="12" y2="4.8" transform={`rotate(${a} 12 12)`} />
+        ))}
+      </svg>
+      <svg className="moon" viewBox="0 0 24 24">
+        <path fill="currentColor" d="M20.4 14.6A8.6 8.6 0 0 1 9.4 3.6a8.6 8.6 0 1 0 11 11z" />
+      </svg>
+    </span>
+  );
 }
-function Options({ label, name, rows, value, required = false }: { label: string; name: string; rows: Named[]; value?: string | null; required?: boolean }) {
-  return <Field label={label}><select name={name} defaultValue={value || ''} required={required}><option value="">Selecione</option>{rows.map(r => <option key={r.id} value={r.id}>{r.icon} {r.name}</option>)}</select></Field>;
-}
-function Modal({ title, children, close }: { title: string; children: ReactNode; close: () => void }) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { const el = dialog.current!; el.showModal(); return () => el.close(); }, []);
-  return <dialog ref={dialog} aria-labelledby="dialog-title" onCancel={close}><div className="modal-head"><h2 id="dialog-title">{title}</h2><button type="button" className="icon-button" onClick={close} aria-label="Fechar">×</button></div>{children}</dialog>;
-}
-function References({ catalog, row, direction }: { catalog: Catalog; row?: Partial<Transaction>; direction: string }) {
-  const [method, setMethod] = useState(row?.paymentMethodId || '');
-  const usesCard = catalog.paymentMethods.some(m => m.id === method && ['credito', 'debito'].includes(m.kind || ''));
-  return <><Options label="Categoria" name="categoryId" rows={catalog.categories} value={row?.categoryId} />{direction === 'income'
-    ? <Options label="Tipo de entrada" name="incomeTypeId" rows={catalog.incomeTypes} value={row?.incomeTypeId} />
-    : <><Field label="Forma de pagamento"><select name="paymentMethodId" value={method} onChange={e => setMethod(e.target.value)}><option value="">Selecione</option>{catalog.paymentMethods.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}</select></Field>{usesCard && <Options label="Cartão" name="cardId" rows={catalog.cards} value={row?.cardId} required />}</>}</>;
-}
-function EditorForm({ editor, catalog, save, close }: { editor: Editor; catalog: Catalog; save: (path: string, method: string, body: unknown) => Promise<void>; close: () => void }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [kind, setKind] = useState('avista');
-  const [direction, setDirection] = useState(editor.type === 'recurrence' ? editor.row.type : editor.type === 'transaction' ? editor.direction : 'expense');
-  const title = editor.type === 'transaction' ? (editor.row ? 'Editar lançamento' : editor.direction === 'income' ? 'Nova entrada' : 'Nova saída') : editor.type === 'box' ? (editor.row ? 'Editar cofrinho' : 'Novo cofrinho') : editor.type === 'movement' ? `${editor.direction === 'deposit' ? 'Depositar' : 'Resgatar'} · ${editor.row.name}` : editor.type === 'recurrence' ? 'Editar recorrência' : editor.type === 'plan' ? 'Editar parcelamento' : editor.row ? 'Editar cadastro' : 'Novo cadastro';
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); setError(''); setBusy(true);
-    const f = new FormData(e.currentTarget);
-    try {
-      if (editor.type === 'transaction') {
-        const body = { type: direction, kind: editor.row ? 'avista' : kind, value: cents(text(f, 'value')), description: text(f, 'description'), date: text(f, 'date'), categoryId: ref(f, 'categoryId'), incomeTypeId: ref(f, 'incomeTypeId'), paymentMethodId: ref(f, 'paymentMethodId'), cardId: ref(f, 'cardId'),
-          ...(!editor.row && kind === 'parcelado' ? { installments: Number(text(f, 'installments')) } : {}), ...(!editor.row && kind === 'fixo' ? { endDate: ref(f, 'endDate') } : {}) };
-        await save('/transactions' + (editor.row ? '/' + editor.row.id : ''), editor.row ? 'PATCH' : 'POST', body);
-      } else if (editor.type === 'box') {
-        await save('/boxes' + (editor.row ? '/' + editor.row.id : ''), editor.row ? 'PATCH' : 'POST', { name: text(f, 'name'), icon: text(f, 'icon'), color: text(f, 'color'), goal: text(f, 'goal') ? cents(text(f, 'goal')) : null });
-      } else if (editor.type === 'movement') {
-        await save(`/boxes/${editor.row.id}/movements`, 'POST', { type: editor.direction, value: cents(text(f, 'value')) });
-      } else if (editor.type === 'recurrence') {
-        await save('/recurrences/' + editor.row.id, 'PATCH', { type: direction, description: text(f, 'description'), value: cents(text(f, 'value')), dayOfMonth: Number(text(f, 'dayOfMonth')), startDate: editor.row.startDate, endDate: ref(f, 'endDate'), active: f.has('active'), categoryId: ref(f, 'categoryId'), incomeTypeId: ref(f, 'incomeTypeId'), paymentMethodId: ref(f, 'paymentMethodId'), cardId: ref(f, 'cardId') });
-      } else if (editor.type === 'plan') {
-        await save('/plans/' + editor.row.id, 'PATCH', { description: text(f, 'description') });
-      } else {
-        const body: Record<string, unknown> = { name: text(f, 'name') };
-        if (editor.resource === 'cards') Object.assign(body, { color: text(f, 'color'), limit: text(f, 'limit') ? cents(text(f, 'limit')) : null, closingDay: text(f, 'closingDay') ? Number(text(f, 'closingDay')) : null, dueDay: text(f, 'dueDay') ? Number(text(f, 'dueDay')) : null });
-        else { body.icon = text(f, 'icon'); if (editor.resource === 'payment-methods') body.kind = text(f, 'kind'); else body.color = text(f, 'color'); }
-        await save(`/settings/${editor.resource}` + (editor.row ? '/' + editor.row.id : ''), editor.row ? 'PATCH' : 'POST', body);
-      }
-    } catch (err) { setError(err instanceof Error ? err.message : 'Erro ao salvar.'); }
-    finally { setBusy(false); }
+
+function Page({ route }: { route: Route }) {
+  const { user } = useApp();
+  const [section, a, b, c] = route.path;
+  switch (section ?? 'dashboard') {
+    case 'dashboard':
+      return <DashboardPage />;
+    case 'gastos':
+    case 'entradas': {
+      const type = section === 'gastos' ? 'expense' : 'income';
+      if (!a) return <TransactionList type={type} />;
+      if (a === 'novo' || a === 'nova') return <TransactionForm type={type} />;
+      if (b === 'editar') return <TransactionForm type={type} id={a} />;
+      break;
+    }
+    case 'lancamentos':
+      if (b === 'excluir') return <TransactionDelete id={a} />;
+      break;
+    case 'cofrinhos':
+      if (!a) return <BoxList />;
+      if (a === 'novo') return <BoxForm />;
+      if (b === 'editar') return <BoxForm id={a} />;
+      if (b === 'excluir') return <BoxDelete id={a} />;
+      if (b === 'depositar' || b === 'resgatar')
+        return <BoxMovement id={a} action={b === 'depositar' ? 'deposit' : 'withdraw'} />;
+      break;
+    case 'financas':
+      if (!a) return <FinancePage />;
+      if (a === 'fixos' && c === 'editar') return <RecurrenceForm id={b} />;
+      if (a === 'fixos' && c === 'excluir') return <RecurrenceDelete id={b} />;
+      if (a === 'parcelamentos' && c === 'editar') return <PlanForm id={b} />;
+      if (a === 'parcelamentos' && c === 'excluir') return <PlanDelete id={b} />;
+      break;
+    case 'configuracoes':
+      if (!b) return <SettingsPage tab={a ?? 'aparencia'} />;
+      if (b === 'novo') return <SettingsForm tab={a} />;
+      if (c === 'editar') return <SettingsForm tab={a} id={b} />;
+      if (c === 'excluir') return <SettingsDelete tab={a} id={b} />;
+      break;
+    case 'relatorios':
+      return <ReportsPage />;
+    case 'crab-ai':
+      return <CrabAiPage />;
+    case 'admin':
+      if (!user.isAdmin) break;
+      if (!a) return <AdminPage />;
+      if (a === 'usuarios' && b) return <AdminUser id={b} />;
+      break;
   }
-  return <Modal title={title} close={close}><form onSubmit={submit} className="form-grid">
-    {(editor.type === 'transaction' || editor.type === 'recurrence' || editor.type === 'plan') && <Field label="Descrição"><input name="description" maxLength={255} defaultValue={editor.row?.description} placeholder="Ex.: Mercado da semana" /></Field>}
-    {editor.type === 'transaction' && <><Money value={editor.row?.value} /><Field label="Data"><input name="date" type="date" required defaultValue={editor.row?.date || localDate()} min="1900-01-01" max="2200-12-31" /></Field>{!editor.row && <Field label="Modalidade"><select value={kind} onChange={e => setKind(e.target.value)}><option value="avista">À vista</option><option value="fixo">Fixo mensal</option>{direction === 'expense' && <option value="parcelado">Parcelado</option>}</select></Field>}
-      {kind === 'parcelado' && <Field label="Número de parcelas"><input name="installments" type="number" min={2} max={360} required defaultValue={3}/></Field>}
-      {kind === 'fixo' && <Field label="Data final (opcional)"><input name="endDate" type="date" min="1900-01-01" max="2200-12-31"/></Field>}
-      <References catalog={catalog} row={editor.row} direction={direction}/></>}
-    {(editor.type === 'box' || editor.type === 'resource') && <><Field label="Nome"><input name="name" required maxLength={80} defaultValue={editor.row?.name}/></Field>{!(editor.type === 'resource' && editor.resource === 'cards') && <Field label="Ícone"><input name="icon" maxLength={20} defaultValue={editor.row?.icon || (editor.type === 'box' ? '🐷' : '💰')}/></Field>}{!(editor.type === 'resource' && editor.resource === 'payment-methods') && <Field label="Cor"><input name="color" type="color" defaultValue={editor.row?.color || '#d4ff3f'}/></Field>}</>}
-    {editor.type === 'box' && <Money label="Meta (R$, opcional)" name="goal" value={editor.row?.goal} required={false}/>}
-    {editor.type === 'movement' && <><p className="muted">Guardado: {brl(editor.row.amount)}</p><Money/></>}
-    {editor.type === 'resource' && editor.resource === 'payment-methods' && <Field label="Tipo"><select name="kind" defaultValue={editor.row?.kind || 'pix'}>{[['dinheiro', 'Dinheiro'], ['pix', 'Pix'], ['credito', 'Crédito'], ['debito', 'Débito'], ['transferencia', 'Transferência'], ['boleto', 'Boleto'], ['outro', 'Outro']].map(([v, label]) => <option key={v} value={v}>{label}</option>)}</select></Field>}
-    {editor.type === 'resource' && editor.resource === 'cards' && <><Money label="Limite (R$, opcional)" name="limit" value={editor.row?.limit} required={false}/><Field label="Dia de fechamento"><input name="closingDay" type="number" min={1} max={31} defaultValue={editor.row?.closingDay || ''}/></Field><Field label="Dia de vencimento"><input name="dueDay" type="number" min={1} max={31} defaultValue={editor.row?.dueDay || ''}/></Field></>}
-    {editor.type === 'recurrence' && <><Money value={editor.row.value}/><Field label="Tipo"><select value={direction} onChange={e => setDirection(e.target.value as 'income' | 'expense')}><option value="expense">Saída</option><option value="income">Entrada</option></select></Field><Field label="Dia do mês"><input name="dayOfMonth" type="number" min={1} max={31} required defaultValue={editor.row.dayOfMonth}/></Field><Field label="Data final (opcional)"><input name="endDate" type="date" defaultValue={editor.row.endDate || ''}/></Field><label className="checkbox"><input name="active" type="checkbox" defaultChecked={editor.row.active}/> Ativa</label><References key={direction} catalog={catalog} row={editor.row} direction={direction}/><p className="muted">As alterações valem para os próximos meses. Lançamentos existentes preservam seu histórico.</p></>}
-    {error && <p role="alert" className="error">{error}</p>}<div className="actions"><button type="button" className="secondary" onClick={close} disabled={busy}>Cancelar</button><button disabled={busy}>{busy ? 'Salvando…' : 'Salvar'}</button></div>
-  </form></Modal>;
+  return (
+    <div className="empty panel">
+      <p>Página não encontrada.</p>
+      <a className="button" href={href('dashboard')}>
+        Ir para o Dashboard
+      </a>
+    </div>
+  );
 }
-function Auth({ onLogin }: { onLogin: (user: User) => void }) {
-  const [register, setRegister] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault(); setBusy(true); setError(''); const f = new FormData(e.currentTarget);
-    try { onLogin(await api<User>('/auth/' + (register ? 'register' : 'login'), 'POST', { username: text(f, 'username'), password: text(f, 'password'), ...(register ? { name: text(f, 'name') } : {}) })); }
-    catch (err) { setError(err instanceof Error ? err.message : 'Erro ao entrar.'); } finally { setBusy(false); }
-  }
-  return <main className="auth-shell"><section className="auth-intro"><a className="brand" href="#">💰 Tio Patinhas<span>.</span></a><p className="eyebrow">SEU DINHEIRO, COM DIREÇÃO</p><h1>Pequenos hábitos.<br/><em>Grandes conquistas.</em></h1><p>Organize suas contas, acompanhe seus planos e dê um propósito a cada centavo.</p><div className="intro-stat">Uma vida financeira mais tranquila começa aqui. ↗</div></section><section className="auth-card"><p className="eyebrow">BEM-VINDO AO SEU CONTROLE FINANCEIRO</p><h2>{register ? 'Crie sua conta' : 'Bom te ver por aqui'}</h2><p className="muted">{register ? 'Comece a cuidar dos seus próximos planos.' : 'Entre para acompanhar suas finanças.'}</p><form onSubmit={submit} className="form-grid">{register && <Field label="Seu nome"><input name="name" required maxLength={80} autoComplete="name"/></Field>}<Field label="Usuário"><input name="username" required minLength={3} maxLength={60} autoComplete="username" autoCapitalize="none"/></Field><Field label="Senha"><input name="password" type="password" required minLength={register ? 10 : 1} maxLength={128} autoComplete={register ? 'new-password' : 'current-password'}/></Field>{register && <small className="muted">Use pelo menos 10 caracteres.</small>}{error && <p className="error" role="alert">{error}</p>}<button disabled={busy}>{busy ? 'Aguarde…' : register ? 'Criar conta' : 'Entrar'}</button></form><p className="auth-switch">{register ? 'Já tem uma conta?' : 'Primeira vez por aqui?'} <button className="link" onClick={() => { setRegister(!register); setError(''); }}>{register ? 'Entrar na conta' : 'Criar uma conta'}</button></p></section></main>;
+
+/** Top banner when a savings box reached its goal (Django's alerta_topo). */
+function GoalBanner() {
+  const { route } = useApp();
+  const { data } = useData<Dashboard>('/dashboard', route);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const box = data?.alerts.find(b => !hidden.includes(b.id));
+  if (!box) return null;
+  return (
+    <div className="goal-banner" role="status">
+      <span>🎉 Meta do cofrinho "{box.name}" atingida!</span>
+      <button
+        type="button"
+        className="icon-button"
+        aria-label="Fechar aviso"
+        onClick={() => {
+          setHidden(h => [...h, box.id]);
+          void api(`/boxes/${box.id}/dismiss`, 'POST').catch(() => {});
+        }}
+      >
+        ✕
+      </button>
+    </div>
+  );
 }
-function Summary({ items }: { items: [string, number, string?][] }) { return <div className="summary">{items.map(([label, value, cls]) => <article key={label} className={'stat ' + (cls || '')}><p>{label}</p><strong>{brl(value)}</strong></article>)}</div>; }
-function TransactionTable({ rows, edit, remove }: { rows: Transaction[]; edit?: (t: Transaction) => void; remove?: (t: Transaction) => void }) {
-  if (!rows.length) return <div className="empty">Nenhum lançamento neste período. Que tal registrar o primeiro?</div>;
-  return <div className="table-scroll"><table><thead><tr><th>Descrição</th><th>Data</th><th>Categoria</th><th>Situação</th><th className="right">Valor</th>{edit && <th>Ações</th>}</tr></thead><tbody>{rows.map(t => <tr key={t.id}><td><strong>{t.description || (t.type === 'income' ? 'Entrada' : 'Saída')}</strong><small className="muted">{t.kind === 'fixo' ? 'Fixo mensal' : t.kind === 'parcelado' ? `Parcela ${t.installmentNumber}/${t.plan?.installments || '—'}` : 'À vista'}</small></td><td>{displayDate(t.date)}</td><td>{t.category?.icon} {t.category?.name || 'Sem categoria'}</td><td><span className={'badge ' + (t.applied ? '' : 'planned')}>{t.applied ? 'Realizado' : 'Previsto'}</span></td><td className={'right ' + (t.type === 'income' ? 'positive' : '')}>{t.type === 'income' ? '+' : '−'} {brl(t.value)}</td>{edit && <td><div className="row-actions"><button className="link" onClick={() => edit(t)} aria-label={`Editar ${t.description || 'lançamento'}`}>Editar</button><button className="link danger" onClick={() => remove?.(t)} aria-label={`Excluir ${t.description || 'lançamento'}`}>Excluir</button></div></td>}</tr>)}</tbody></table></div>;
-}
-function App() {
-  const [user, setUser] = useState<User | null>(null), [checking, setChecking] = useState(true);
-  const [page, setPage] = useState<Page>(() => navigation.some(([key]) => key === location.hash.slice(1)) ? location.hash.slice(1) as Page : 'dashboard');
-  const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null), [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
-  const [rows, setRows] = useState<Transaction[]>([]), [boxes, setBoxes] = useState<Box[]>([]), [recs, setRecs] = useState<Recurrence[]>([]), [plans, setPlans] = useState<Plan[]>([]), [report, setReport] = useState<Report | null>(null);
-  const [editor, setEditor] = useState<Editor | null>(null), [confirm, setConfirm] = useState<{ path: string; message: string } | null>(null);
-  const [error, setError] = useState(''), [notice, setNotice] = useState(''), [loading, setLoading] = useState(false), [deleting, setDeleting] = useState(false), [revision, setRevision] = useState(0);
-  const [from, setFrom] = useState(localDate().slice(0, 7) + '-01'), [to, setTo] = useState(localDate().slice(0, 7) + '-' + new Date(Number(localDate().slice(0, 4)), Number(localDate().slice(5, 7)), 0).getDate()), [category, setCategory] = useState('');
-  const [resource, setResource] = useState('categories'), [chart, setChart] = useState<'bars' | 'pie'>('bars');
-  useEffect(() => { document.documentElement.dataset.theme = theme; localStorage.setItem('theme', theme); }, [theme]);
-  useEffect(() => { const controller = new AbortController(); api<User>('/auth/me', 'GET', undefined, controller.signal).then(setUser).catch(err => { if (!(err instanceof ApiError && err.status === 401) && err.name !== 'AbortError') setError('Não foi possível conectar ao servidor.'); }).finally(() => setChecking(false)); return () => controller.abort(); }, []);
-  useEffect(() => { const listener = () => { const next = location.hash.slice(1) as Page; if (navigation.some(([key]) => key === next)) setPage(next); }; window.addEventListener('hashchange', listener); return () => window.removeEventListener('hashchange', listener); }, []);
+
+function Root() {
+  const [user, setUser] = useState<User | null>(null),
+    [checking, setChecking] = useState(true);
+  const [theme, setTheme] = useState<'dark' | 'light'>(() =>
+    localStorage.getItem('theme') === 'light' ? 'light' : 'dark',
+  );
+  const [route, setRoute] = useState<Route>(() => parseRoute());
+  const [flash, setFlash] = useState<Flash[]>([]),
+    keepFlash = useRef(false);
+  const [catalog, setCatalog] = useState<Catalog | null>(null),
+    [catalogVersion, setCatalogVersion] = useState(0);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
+  }, [theme]);
+  useEffect(() => {
+    const controller = new AbortController();
+    api<User>('/auth/me', 'GET', undefined, controller.signal)
+      .then(setUser)
+      .catch(() => {})
+      .finally(() => {
+        if (!controller.signal.aborted) setChecking(false);
+      });
+    return () => controller.abort();
+  }, []);
+  useEffect(() => {
+    const first = route.path[0];
+    if (first && legacy[first]) location.replace(href(legacy[first]));
+    const listener = () => {
+      setRoute(parseRoute());
+      if (!keepFlash.current) setFlash([]);
+      keepFlash.current = false;
+      scrollTo(0, 0);
+    };
+    addEventListener('hashchange', listener);
+    return () => removeEventListener('hashchange', listener);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!user) return;
-    const controller = new AbortController();
-    const get = <T,>(p: string) => api<T>(p, 'GET', undefined, controller.signal);
-    async function load() {
-      setLoading(true); setError('');
-      const query = new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}), ...(category ? { categoryId: category } : {}) });
-      try {
-        const [d, c] = await Promise.all([get<Dashboard>('/dashboard'), get<Catalog>('/catalog')]);
-        if (controller.signal.aborted) return;
-        setDashboard(d); setCatalog(c);
-        if (page === 'expenses' || page === 'incomes') setRows(await get<Transaction[]>('/transactions?' + query + '&type=' + (page === 'incomes' ? 'income' : 'expense')));
-        if (page === 'boxes') setBoxes(await get<Box[]>('/boxes'));
-        if (page === 'finance') { const [r, p] = await Promise.all([get<Recurrence[]>('/recurrences'), get<Plan[]>('/plans')]); setRecs(r); setPlans(p); }
-        if (page === 'reports') setReport(await get<Report>('/reports?' + query));
-      } catch (err) { if (controller.signal.aborted) return; if (err instanceof ApiError && err.status === 401) { setUser(null); } else setError(err instanceof Error ? err.message : 'Erro ao carregar.'); }
-      finally { if (!controller.signal.aborted) setLoading(false); }
+    api<Catalog>('/catalog')
+      .then(setCatalog)
+      .catch(() => {});
+  }, [user, catalogVersion]);
+  const unauthorized = useCallback(() => {
+    setUser(null);
+    setCatalog(null);
+  }, []);
+  const go = useCallback((path: string, messages: Flash[] = []) => {
+    setFlash(messages);
+    const target = '#/' + path.replace(/^#?\/?/, '');
+    if (location.hash === target) {
+      setRoute(parseRoute(target));
+      scrollTo(0, 0);
+    } else {
+      keepFlash.current = true;
+      location.hash = target;
     }
-    void load(); return () => controller.abort();
-  }, [user, page, from, to, category, revision]);
-  async function save(path: string, method: string, body: unknown) { await api(path, method, body); setEditor(null); setNotice('Salvo com sucesso.'); setRevision(r => r + 1); }
-  async function action(path: string, body?: unknown) { try { await api(path, 'POST', body); setRevision(r => r + 1); } catch (err) { setError((err as Error).message); } }
-  async function logout() { try { await api('/auth/logout', 'POST'); setUser(null); setDashboard(null); setEditor(null); setConfirm(null); setNotice(''); } catch (err) { setError((err as Error).message); } }
-  const remove = (path: string, message = 'Excluir este registro? Esta ação não pode ser desfeita.') => { setError(''); setConfirm({ path, message }); };
-  const editTransaction = (row: Transaction) => setEditor({ type: 'transaction', direction: row.type, row });
-  const periodControls = <div className="filters"><Field label="De"><input type="date" value={from} onChange={e => setFrom(e.target.value)} /></Field><Field label="Até"><input type="date" value={to} onChange={e => setTo(e.target.value)} /></Field><Field label="Categoria"><select value={category} onChange={e => setCategory(e.target.value)}><option value="">Todas as categorias</option>{catalog.categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field><button className="secondary" onClick={() => { setFrom(''); setTo(''); setCategory(''); }}>Todo o período</button></div>;
-  if (checking) return <main className="loading" role="status">Abrindo sua carteira…</main>;
-  if (!user) return <>{error && <p role="alert" className="error">{error}</p>}<Auth onLogin={u => { setError(''); setUser(u); }}/></>;
-  const resourceRows = resource === 'categories' ? catalog.categories : resource === 'cards' ? catalog.cards : resource === 'payment-methods' ? catalog.paymentMethods : catalog.incomeTypes;
-  return <><header><div className="header-inner"><a className="brand" href="#dashboard">💰 Tio Patinhas<span>.</span></a><div className="header-actions"><span className="muted">Olá, {user.name}</span><button className="secondary" aria-label="Alternar tema" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? '☀' : '☾'}</button><button className="secondary" onClick={logout}>Sair</button></div></div><nav aria-label="Navegação principal">{navigation.map(([key, label]) => <a key={key} href={'#' + key} aria-current={page === key ? 'page' : undefined} onClick={() => { setNotice(''); setError(''); }}>{label}</a>)}</nav></header>
-    <main className="container" aria-busy={loading}>{error && <p role="alert" className="error">{error}</p>}{notice && <div role="status" className="notice">{notice}<button className="link" onClick={() => setNotice('')} aria-label="Fechar mensagem">×</button></div>}
-      {dashboard?.alerts.map(b => <div className="goal-alert" key={b.id}><span>🎉 Meta do cofrinho {b.name} atingida! Você guardou {brl(b.amount)}.</span><button className="link" aria-label={`Fechar aviso ${b.name}`} onClick={() => action('/boxes/' + b.id + '/dismiss')}>×</button></div>)}
-      <div className="page-heading"><div><p className="eyebrow">SEU CONTROLE FINANCEIRO</p><h1>{navigation.find(([k]) => k === page)?.[1]}</h1><p className="muted">{page === 'dashboard' ? 'Clareza nas contas. Espaço para seus planos.' : page === 'finance' ? 'Organize os compromissos de hoje e os planos de amanhã.' : 'Cada escolha conta para sua próxima conquista.'}</p></div>{(page === 'expenses' || page === 'incomes') && <button onClick={() => setEditor({ type: 'transaction', direction: page === 'incomes' ? 'income' : 'expense' })}>+ {page === 'incomes' ? 'Nova entrada' : 'Nova saída'}</button>}{page === 'boxes' && <button onClick={() => setEditor({ type: 'box' })}>+ Novo cofrinho</button>}</div>
-      {loading && <p className="muted" role="status">Atualizando…</p>}
-      {page === 'dashboard' && dashboard && <><Summary items={[["Saldo disponível", dashboard.user.balance, 'accent'], ['Entradas do mês', dashboard.income], ['Saídas do mês', dashboard.expense], ['Nos cofrinhos', dashboard.saved]]}/><div className="two-columns"><section className="panel"><div className="section-heading"><div><p className="eyebrow">MOVIMENTE SEUS PLANOS</p><h2>Seu próximo passo</h2></div><span className="big-icon">↗</span></div><p className="muted">Mantenha seus registros em dia e acompanhe cada conquista.</p><div className="actions start"><button onClick={() => setEditor({ type: 'transaction', direction: 'income' })}>+ Nova entrada</button><button className="secondary" onClick={() => setEditor({ type: 'transaction', direction: 'expense' })}>+ Nova saída</button></div></section><section className="panel"><p className="eyebrow">CONSTRUINDO SEU FUTURO</p><h2>Reserve para o que importa</h2><p className="muted">Separe dinheiro em cofrinhos com metas e acompanhe sua evolução.</p><a className="button secondary" href="#boxes">Ver meus cofrinhos ↗</a></section></div><section className="panel"><div className="section-heading"><h2>Últimos lançamentos</h2><a className="link" href="#expenses">Ver saídas ↗</a></div><TransactionTable rows={dashboard.recent}/></section></>}
-      {(page === 'expenses' || page === 'incomes') && <section className="panel">{periodControls}<TransactionTable rows={rows} edit={editTransaction} remove={t => remove('/transactions/' + t.id, 'Excluir este lançamento e reverter seu efeito no saldo?')}/></section>}
-      {page === 'boxes' && <>{!boxes.length && <div className="empty panel">Seus planos merecem um lugar. Crie seu primeiro cofrinho.</div>}<div className="box-grid">{boxes.map(b => { const reached = !!b.goal && b.amount >= b.goal; const progress = b.goal ? Math.min(100, b.amount / b.goal * 100) : 0; return <article className="panel savings" key={b.id}><div className="section-heading"><span className="box-icon">{b.icon}</span>{reached && <span className="badge">Meta atingida ✓</span>}</div><h2>{b.name}</h2><strong className="box-amount">{brl(b.amount)}</strong>{b.goal ? <><p className="muted">de {brl(b.goal)} · {progress.toFixed(0)}%</p><progress max="100" value={progress} aria-label={`Progresso ${b.name}`}/></> : <p className="muted">Uma reserva sem limite de sonhos.</p>}<div className="actions start"><button onClick={() => setEditor({ type: 'movement', row: b, direction: 'deposit' })}>Depositar</button><button className="secondary" onClick={() => setEditor({ type: 'movement', row: b, direction: 'withdraw' })}>Resgatar</button></div><div className="row-actions"><button className="link" onClick={() => setEditor({ type: 'box', row: b })}>Editar</button><button className="link danger" onClick={() => remove('/boxes/' + b.id, 'Excluir o cofrinho? O valor guardado voltará para a carteira.')}>Excluir</button></div>{b.movements.length > 0 && <details><summary>Últimas movimentações</summary>{b.movements.map(m => <p className="movement" key={m.id}><span>{m.type === 'deposit' ? 'Depósito' : 'Resgate'} · {displayDate(m.createdAt)}</span><strong>{brl(m.value)}</strong></p>)}</details>}</article>; })}</div></>}
-      {page === 'finance' && dashboard && <><section className="panel"><h2>Projeção dos próximos 6 meses</h2><p className="muted">Inclui parcelas e recorrências ativas, sem movimentar o saldo atual.</p><div className="table-scroll"><table><thead><tr><th>Mês</th><th>Entradas previstas</th><th>Saídas previstas</th><th>Resultado</th></tr></thead><tbody>{dashboard.projection.map(p => <tr key={p.month}><td>{p.month.slice(5, 7)}/{p.month.slice(0, 4)}</td><td className="positive">{brl(p.income)}</td><td>{brl(p.expense)}</td><td>{brl(p.net)}</td></tr>)}</tbody></table></div></section><h2>Meus cartões</h2><div className="box-grid">{dashboard.cards.map(c => <article className="panel" key={c.id}><h3>💳 {c.name}</h3><p>Fatura atual <strong>{brl(c.invoice)}</strong></p><small className="muted">{displayDate(c.from)} a {displayDate(c.to)}{c.dueDate && ` · Vence em ${displayDate(c.dueDate)}`}</small><p>Limite utilizado: {brl(c.used)}</p><p>Disponível: {c.available === null ? 'Sem limite cadastrado' : brl(c.available)}</p></article>)}</div>{!dashboard.cards.length && <p className="muted">Cadastre seus cartões em Configurações.</p>}<section className="panel"><div className="section-heading"><h2>Fixos mensais</h2><button className="secondary" onClick={() => setEditor({ type: 'transaction', direction: 'expense' })}>+ Novo lançamento</button></div><p className="muted">Escolha “Fixo mensal” na modalidade ao criar um lançamento.</p>{!recs.length && <p className="empty">Nenhuma recorrência cadastrada.</p>}{recs.map(r => <div className="record-row" key={r.id}><div><strong>{r.description || 'Fixo mensal'}</strong><small>Dia {r.dayOfMonth} · {r.type === 'income' ? 'Entrada' : 'Saída'} · {r.active ? 'Ativa' : 'Pausada'}</small></div><span>{brl(r.value)}/mês</span><div className="row-actions"><button className="link" onClick={() => setEditor({ type: 'recurrence', row: r })}>Editar</button><button className="link danger" onClick={() => remove('/recurrences/' + r.id, 'Excluir a recorrência? Os lançamentos já gerados serão preservados.')}>Excluir</button></div></div>)}</section><section className="panel"><h2>Compras parceladas</h2>{!plans.length && <p className="empty">Nenhum parcelamento cadastrado.</p>}{plans.map(p => <div className="record-row" key={p.id}><div><strong>{p.description || 'Compra parcelada'}</strong><small>{p.installments} parcelas · {p.transactions.filter(t => t.applied).length} realizadas</small></div><span>{brl(p.totalValue)}</span><div className="row-actions"><button className="link" onClick={() => setEditor({ type: 'plan', row: p })}>Editar</button><button className="link danger" onClick={() => remove('/plans/' + p.id, 'Excluir o plano e todas as parcelas? O saldo das parcelas realizadas será devolvido.')}>Excluir</button></div></div>)}</section><section className="panel"><h2>Próximos lançamentos já gerados</h2><TransactionTable rows={dashboard.upcoming}/></section></>}
-      {page === 'reports' && <><section className="panel">{periodControls}</section>{report && <><Summary items={[["Entradas no período", report.income], ['Saídas no período', report.expense], ['Resultado', report.net, 'accent']]}/><section className="panel"><div className="section-heading"><h2>Saídas por categoria</h2><button className="secondary" onClick={() => setChart(c => c === 'bars' ? 'pie' : 'bars')}>{chart === 'bars' ? 'Ver pizza' : 'Ver barras'}</button></div><p className="muted">Inclui realizados e previstos no período selecionado.</p>{!report.byCategory.length && <p className="empty">Sem saídas para este período.</p>}{chart === 'pie' && report.expense > 0 && <div className="pie" role="img" aria-label="Distribuição de saídas por categoria; valores na lista abaixo" style={{ background: 'conic-gradient(' + report.byCategory.map((c, i, all) => `${c.color} ${all.slice(0, i).reduce((s, x) => s + x.value, 0) / report.expense * 100}% ${all.slice(0, i + 1).reduce((s, x) => s + x.value, 0) / report.expense * 100}%`).join(',') + ')' }}/>} {report.byCategory.map(c => <div className="category-report" key={c.name}><div><strong>{c.name}</strong><span>{brl(c.value)} · {(c.value / report.expense * 100).toFixed(1)}%</span></div>{chart === 'bars' && <div className="bar-track"><div style={{ width: c.value / report.expense * 100 + '%', backgroundColor: c.color }}/></div>}</div>)}<p className="muted">Fixos: {brl(report.fixed)} · Parcelas: {brl(report.installments)}</p></section></>}</>}
-      {page === 'settings' && <><section className="panel"><div className="section-heading"><div><h2>Aparência</h2><p className="muted">Escolha o tema que combina com você.</p></div><button className="secondary" onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}>{theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}</button></div></section><section className="panel"><div className="section-heading"><Field label="Cadastro"><select value={resource} onChange={e => setResource(e.target.value)}><option value="categories">Categorias</option><option value="payment-methods">Formas de pagamento</option><option value="cards">Cartões</option><option value="income-types">Tipos de entrada</option></select></Field><button onClick={() => setEditor({ type: 'resource', resource })}>+ Novo cadastro</button></div>{resourceRows.map(r => <div className="record-row" key={r.id}><div><strong>{r.icon} {r.name}</strong>{r.isDefault && <small>Categoria padrão</small>}{resource === 'cards' && <small>Limite: {r.limit ? brl(r.limit) : 'Não informado'}</small>}</div>{!r.isDefault && <div className="row-actions"><button className="link" onClick={() => setEditor({ type: 'resource', resource, row: r })}>Editar</button><button className="link danger" onClick={() => remove(`/settings/${resource}/${r.id}`)}>Excluir</button></div>}</div>)}</section></>}
-    </main><footer><span className="brand">💰 Tio Patinhas<span>.</span></span><span>Seu dinheiro, seus planos. Um passo de cada vez.</span></footer>
-    {editor && <EditorForm editor={editor} catalog={catalog} save={save} close={() => setEditor(null)}/>}
-    {confirm && <Modal title="Confirmar exclusão" close={() => !deleting && setConfirm(null)}><p>{confirm.message}</p>{error && <p className="error" role="alert">{error}</p>}<div className="actions"><button className="secondary" disabled={deleting} onClick={() => setConfirm(null)}>Cancelar</button><button className="destructive" disabled={deleting} onClick={async () => { setDeleting(true); try { await api(confirm.path, 'DELETE'); setConfirm(null); setNotice('Registro excluído.'); setRevision(r => r + 1); } catch (err) { setError((err as Error).message); } finally { setDeleting(false); } }}>{deleting ? 'Excluindo…' : 'Confirmar exclusão'}</button></div></Modal>}
-  </>;
+  }, []);
+  const reloadCatalog = useCallback(() => setCatalogVersion(v => v + 1), []);
+  // Keep the current page visible in the header menu when it scrolls sideways (small screens).
+  useEffect(() => {
+    document.querySelector('header nav [aria-current=page]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [route, user]);
+  async function logout() {
+    try {
+      await api('/auth/logout', 'POST');
+    } catch (err) {
+      if (!(err instanceof ApiError)) throw err;
+    }
+    setUser(null);
+    setCatalog(null);
+    setFlash([]);
+  }
+  if (checking)
+    return (
+      <main className="loading" role="status">
+        Abrindo sua carteira…
+      </main>
+    );
+  // The plans and checkout pages are public and have their own layout.
+  if (route.path[0] === 'planos')
+    return route.path[1] === 'checkout' ? (
+      <CheckoutPage
+        user={user}
+        planId={route.query.get('plano')}
+        onAccess={access => setUser(u => u && { ...u, access })}
+      />
+    ) : route.path[1] === 'resultado' ? (
+      <ResultPage user={user} status={route.query.get('status')} planId={route.query.get('plano')} />
+    ) : (
+      <PlansPage user={user} />
+    );
+  if (!user)
+    return (
+      <Auth
+        onLogin={() => {
+          setFlash([]);
+          void api<User>('/auth/me').then(setUser);
+        }}
+      />
+    );
+  // Trial over and no paid plan: only the plans page is available.
+  if (user.access?.status === 'expirado' && !user.isAdmin) return <PlansPage user={user} />;
+  const access = user.access;
+  const section = route.path[0] ?? '';
+  const context = {
+    user,
+    route,
+    catalog,
+    go,
+    reloadCatalog,
+    unauthorized,
+    theme,
+    setTheme,
+    logout: () => void logout(),
+  };
+  return (
+    <App.Provider value={context}>
+      <GoalBanner />
+      <header>
+        <div className="header-inner">
+          <a className="brand" href={href('dashboard')}>
+            <img src="/logo.png" alt="" />
+            CRAB FINANCE<span>.</span>
+          </a>
+          <nav aria-label="Navegação principal">
+            {menu.map(([key, label, sections, icon]) => (
+              <a key={key} href={href(key)} aria-current={sections.includes(section) ? 'page' : undefined}>
+                <svg
+                  className="nav-icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d={icon} />
+                </svg>
+                <span>{label}</span>
+              </a>
+            ))}
+          </nav>
+          <div className="header-actions">
+            <span className="muted hello" title={user.name}>
+              Olá, {user.name}
+            </span>
+            <button
+              className="secondary theme-toggle"
+              aria-label="Alternar tema"
+              title={theme === 'dark' ? 'Usar tema claro' : 'Usar tema escuro'}
+              onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}
+            >
+              <ThemeIcon />
+            </button>
+            {user.isAdmin && (
+              <a
+                className={'icon-link' + (section === 'admin' ? ' active' : '')}
+                href={href('admin')}
+                title="Painel do admin"
+                aria-label="Painel do admin"
+                aria-current={section === 'admin' ? 'page' : undefined}
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z" />
+                  <path d="m9 12 2 2 4-4" />
+                </svg>
+              </a>
+            )}
+            <a
+              className={'icon-link' + (section === 'configuracoes' ? ' active' : '')}
+              href={href('configuracoes')}
+              title="Configurações"
+              aria-label="Configurações"
+              aria-current={section === 'configuracoes' ? 'page' : undefined}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </a>
+            <button className="secondary" onClick={logout}>
+              Sair
+            </button>
+            {access && (
+              <a
+                className={'trial-pill' + (access.status === 'pago' ? ' paid' : '')}
+                href={href('planos')}
+                title={access.status === 'teste' ? `Teste gratuito: ${trialText(access.daysLeft)}` : 'Seu plano'}
+              >
+                <span className="trial-dot" />
+                <span className="pill-long">{accessLabel(access)}</span>
+                <span className="pill-short">
+                  {access.status === 'teste'
+                    ? `${access.daysLeft} ${access.daysLeft === 1 ? 'dia' : 'dias'}`
+                    : access.status === 'pago' && access.plan
+                      ? planName[access.plan]
+                      : 'Expirado'}
+                </span>
+              </a>
+            )}
+          </div>
+        </div>
+      </header>
+      {section === 'crab-ai' ? (
+        <main className="ai-shell">
+          <CrabAiPage />
+        </main>
+      ) : (
+        <main className="container">
+          {flash.length > 0 && (
+            <div className="flash-list">
+              {flash.map((m, i) => (
+                <div key={i} className={'flash ' + m.kind} role={m.kind === 'success' ? 'status' : 'alert'}>
+                  {m.text}
+                </div>
+              ))}
+            </div>
+          )}
+          <Page key={route.path.join('/') + '?' + route.query} route={route} />
+        </main>
+      )}
+      {section !== 'crab-ai' && (
+        <a className="crab-ai-fab" href={href('crab-ai')} aria-label="Abrir o Crab AI">
+          <img src="/logo.png" alt="" />
+          <span>Crab AI</span>
+        </a>
+      )}
+      {section !== 'crab-ai' && (
+        <footer>
+          <span className="brand">
+            <img src="/logo.png" alt="" />
+            CRAB FINANCE<span>.</span>
+          </span>
+          <div className="footer-text">
+            <span>
+              © {new Date().getFullYear()} CRAB FINANCE — controle financeiro pessoal. Todos os dados ficam só com você.
+            </span>
+            <span className="footer-credit">
+              Desenvolvido por <strong>Caio Agrelli</strong>
+            </span>
+          </div>
+        </footer>
+      )}
+    </App.Provider>
+  );
 }
-createRoot(document.getElementById('root')!).render(<StrictMode><App/></StrictMode>);
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <Root />
+  </StrictMode>,
+);

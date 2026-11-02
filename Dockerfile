@@ -24,4 +24,5 @@ COPY --from=build --chown=node:node /app/web-dist ./web-dist
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["sh", "-c", "./node_modules/.bin/prisma migrate deploy && exec node dist/server/src/main.js"]
+# Migrations run once per deploy in the separate "migrate" service (see compose.yaml), never in each app server.
+CMD ["node", "dist/server/src/main.js"]

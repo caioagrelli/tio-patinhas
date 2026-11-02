@@ -9,8 +9,18 @@ model User {
   id String @id @default(uuid())
   username String @unique
   name String
-  passwordHash String
+  // Legacy password accounts keep their hash; Google sign-in is the only login method.
+  passwordHash String?
+  googleId String? @unique
+  email String?
+  // Paid plan: "mensal", "anual" or "vitalicio". planExpiresAt is null for lifetime access.
+  plan String?
+  planExpiresAt DateTime?
+  payments Payment[]
+  aiUsage AiUsage[]
+  aiConversations AiConversation[]
   active Boolean @default(true)
+  isAdmin Boolean @default(false)
   balance BigInt @default(0)
   createdAt DateTime @default(now())
   sessions Session[]
@@ -168,4 +178,70 @@ model InstallmentPlan {
   card Card? @relation(fields: [cardId], references: [id], onDelete: SetNull)
   transactions Transaction[]
   @@index([userId])
+}
+
+/// A checkout started with Mercado Pago: an order (annual, lifetime) or a subscription (monthly).
+model Payment {
+  id String @id @default(uuid())
+  /// Kept (without the person) when the account is deleted: sales and AI costs stay in the books.
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  plan String
+  kind String
+  reference String @unique
+  providerId String? @unique
+  amount BigInt
+  status String @default("created")
+  appliedAt DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+/// Tokens and cost of one Crab AI question (all model calls of that question added up).
+model AiUsage {
+  id String @id @default(uuid())
+  /// Kept (without the person) when the account is deleted: sales and AI costs stay in the books.
+  userId String?
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  model String
+  rounds Int
+  inputTokens Int
+  outputTokens Int
+  cacheReadTokens Int
+  cacheWriteTokens Int
+  /// Cost in millionths of a US dollar, from the model's price list.
+  costMicroUsd Int
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([createdAt])
+}
+
+/// A Crab AI chat, listed in the sidebar like a regular assistant.
+model AiConversation {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title String
+  pinned Boolean @default(false)
+  messages AiMessage[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, updatedAt])
+}
+
+model AiMessage {
+  id String @id @default(uuid())
+  conversationId String
+  conversation AiConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role String
+  content String
+  /// Saved answers are listed under "Artefatos".
+  saved Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
 }
