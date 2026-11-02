@@ -41,7 +41,7 @@ Depois siga a partir do item 2 da seção 1 (DNS e `.env`).
    ```
    Copie o `.env.example` para `/opt/crab-finance/.env` e preencha:
    - `POSTGRES_PASSWORD`: `openssl rand -hex 32`.
-   - `DOMAIN`, `ACME_EMAIL`.
+   - `DOMAIN` (sem domínio ainda, use `<ip-com-hifens>.sslip.io`, ex.: `3-140-72-220.sslip.io`).
    - `TRUST_PROXY=1` (só o Caddy na frente) ou `TRUST_PROXY=2` (Cloudflare com proxy + Caddy).
    - `BACKUP_PASSPHRASE`: `openssl rand -hex 32`. **Guarde também num gerenciador de senhas**: sem ela os backups não abrem.
    - `BACKUP_REMOTE` e `BACKUP_S3_*` do armazenamento externo (ex.: um bucket do Cloudflare R2 com uma chave que só escreve nele).

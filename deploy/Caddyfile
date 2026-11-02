@@ -1,6 +1,5 @@
-# HTTPS automático (Let's Encrypt) e balanceamento entre os servidores do app.
+# HTTPS automático (Let's Encrypt, renovado pelo próprio Caddy) e balanceamento entre os servidores do app.
 {
-	email {$ACME_EMAIL}
 	servers {
 		# Só a Cloudflare pode informar o IP do visitante (lista de cloudflare.com/ips, conferida em 02/11/2026).
 		# Quem acessa o servidor direto não consegue falsificar o X-Forwarded-For.

@@ -36,7 +36,6 @@ services:
     image: caddy:2-alpine
     environment:
       DOMAIN: ${DOMAIN}
-      ACME_EMAIL: ${ACME_EMAIL:?Defina ACME_EMAIL no .env}
     ports:
       - '80:80'
       - '443:443'
