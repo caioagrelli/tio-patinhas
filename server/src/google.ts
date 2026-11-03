@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { AuthService, secure } from './auth';
 import { createDefaults } from './defaults';
 import { Database } from './database';
+import { EmailAccountService } from './email-account';
 const authorizeUrl = 'https://accounts.google.com/o/oauth2/v2/auth';
 const tokenUrl = 'https://oauth2.googleapis.com/token';
 const stateCookie = 'google_oauth';
@@ -34,6 +35,7 @@ export class GoogleAuth {
   constructor(
     @Inject(Database) private readonly db: Database,
     @Inject(AuthService) private readonly auth: AuthService,
+    @Inject(EmailAccountService) private readonly emailAccount: EmailAccountService,
   ) {}
   /** Starts the authorization code flow with PKCE; state, verifier and nonce live in a short HttpOnly cookie. */
   start(res: Response): string {
@@ -117,21 +119,27 @@ export class GoogleAuth {
   }
   private async findOrCreate(googleId: string, email: string, name?: string) {
     const existing = await this.db.user.findUnique({ where: { googleId } });
+    // Google only returns verified addresses (checked in callback), so the e-mail counts as confirmed.
     if (existing)
-      return existing.email === email ? existing : this.db.user.update({ where: { id: existing.id }, data: { email } });
+      return existing.email === email && existing.emailVerifiedAt
+        ? existing
+        : this.db.user.update({ where: { id: existing.id }, data: { email, emailVerifiedAt: new Date() } });
     try {
-      return await this.db.$transaction(async tx => {
-        const user = await tx.user.create({
+      const user = await this.db.$transaction(async tx => {
+        const row = await tx.user.create({
           data: {
             googleId,
             email,
+            emailVerifiedAt: new Date(),
             username: 'google:' + googleId,
             name: name?.trim().slice(0, 80) || email.split('@')[0],
           },
         });
-        await createDefaults(tx, user.id);
-        return user;
+        await createDefaults(tx, row.id);
+        return row;
       });
+      await this.emailAccount.welcomeGoogle({ name: user.name, email });
+      return user;
     } catch {
       // Two simultaneous first logins: the other request created the account.
       return this.db.user.findUniqueOrThrow({ where: { googleId } });

@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { isPlan, planName, planPrice, type Access, type PlanId } from '../../shared/plans';
 import type { AuthRequest } from './auth';
 import { Database } from './database';
+import { mailEnabled } from './mail';
 
 const api = 'https://api.mercadopago.com';
 export const billingEnabled = () => Boolean(process.env.MERCADOPAGO_ACCESS_TOKEN && process.env.APP_URL);
@@ -113,6 +114,9 @@ export class BillingService {
     const email = user.email ?? parsed.data.email;
     if (!email) throw new BadRequestException('Informe o e-mail da conta para receber o recibo.');
     if (user.plan === 'vitalicio') throw new BadRequestException('Sua conta já tem o plano vitalício.');
+    // The receipt goes to the account's e-mail: when e-mails are on, it must be confirmed first.
+    if (mailEnabled() && user.email && !user.emailVerifiedAt)
+      throw new BadRequestException('Confirme seu e-mail antes de assinar: o recibo vai para ele.');
     const reference = `${plan}-${randomUUID()}`,
       amount = planPrice[plan],
       title = `CRAB FINANCE - Plano ${planName[plan]}`;

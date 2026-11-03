@@ -12,6 +12,8 @@ import { Request, Response } from 'express';
 import { Prisma } from '@prisma/client';
 import { Database } from './database';
 import { createDefaults } from './defaults';
+import { z } from 'zod';
+import { username } from '../../shared/schemas';
 export { createDefaults };
 const scrypt = promisify(scryptCallback);
 export type AuthRequest = Request & { userId: string };
@@ -64,7 +66,13 @@ export class AuthService {
     }
   }
   async login(input: { username: string; password: string }, res: Response) {
-    const user = await this.db.user.findUnique({ where: { username: input.username.toLowerCase() } });
+    // The login field accepts the username or the account's e-mail.
+    const login = input.username.trim().toLowerCase();
+    const user =
+      (await this.db.user.findUnique({ where: { username: login } })) ??
+      (login.includes('@')
+        ? await this.db.user.findFirst({ where: { email: { equals: login, mode: 'insensitive' } } })
+        : null);
     // Perform the same costly derivation for nonexistent usernames.
     const fallback = 'scrypt$00000000000000000000000000000000$' + '00'.repeat(64);
     const valid = await verifyPassword(input.password, user?.passwordHash ?? fallback);
@@ -80,6 +88,21 @@ export class AuthService {
       data: { userId, tokenHash: tokenHash(token), expiresAt: new Date(Date.now() + maxAge) },
     });
     res.cookie('session', token, { httpOnly: true, secure: secure(), sameSite: 'strict', maxAge, path: '/' });
+  }
+  /** Google sign-ups start with a placeholder username ("google:<id>") and choose a real one once. */
+  async chooseUsername(userId: string, body: unknown) {
+    const input = z.object({ username }).strict().safeParse(body);
+    if (!input.success) throw new BadRequestException(input.error.issues[0].message);
+    const user = await this.db.user.findUniqueOrThrow({ where: { id: userId } });
+    if (!user.username.startsWith('google:')) throw new BadRequestException('Seu nome de usuário já foi escolhido.');
+    try {
+      await this.db.user.update({ where: { id: userId }, data: { username: input.data.username } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')
+        throw new BadRequestException('Esse usuário já existe. Escolha outro.');
+      throw err;
+    }
+    return { username: input.data.username };
   }
   async logout(req: Request, res: Response) {
     if (typeof req.cookies.session === 'string')

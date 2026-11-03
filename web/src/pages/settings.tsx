@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api, brl, cents } from '../api';
 import type { CardSummary, Named } from '../types';
-import { DeleteAccount } from '../account';
+import { ChangePassword, DeleteAccount } from '../account';
 import { ConfirmDelete, Field, Loading, MoneyInput, PageHeader, Progress, Back, href, useApp, useData } from '../ui';
 
 type Tab = { title: string; singular: string; description: string; resource: string; tip?: string; feminine?: boolean };
@@ -228,7 +228,10 @@ export function SettingsPage({ tab }: { tab: string }) {
           {current === 'aparencia' ? (
             <Appearance />
           ) : current === 'conta' ? (
-            <DeleteAccount user={user} />
+            <div className="account-sections">
+              <ChangePassword user={user} />
+              <DeleteAccount user={user} />
+            </div>
           ) : (
             <Items tab={current} />
           )}

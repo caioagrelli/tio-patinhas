@@ -5953,3 +5953,83 @@ body:has(.ai-shell) #root {
   background: var(--panel);
   color: var(--fg);
 }
+/* Login: link "Esqueci minha senha" logo abaixo da senha. */
+.auth-card .forgot-link {
+  justify-self: end;
+  margin-top: -8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.auth-card .forgot-link:hover {
+  color: var(--fg);
+}
+/* Telas de um cartão só (nova senha, escolher usuário): mesmo visual do login, sem vazar no celular. */
+.auth-page .auth-shell.single {
+  grid-template-columns: minmax(0, 440px);
+  justify-content: center;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+.auth-shell.single .auth-card {
+  min-width: 0;
+}
+.auth-page .auth-shell.single .brand {
+  font-size: 18px;
+  margin-bottom: 26px;
+  white-space: normal;
+}
+.auth-page .auth-shell.single .brand > img {
+  height: 1.5em;
+  margin-right: 12px;
+}
+.auth-page .auth-title {
+  font-family: inherit;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  margin: 0 0 8px;
+}
+.auth-page .auth-title + .muted {
+  margin: 0 0 22px;
+}
+/* Aviso para confirmar o e-mail. */
+.email-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.email-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.email-banner .icon-button {
+  font-size: 15px;
+  padding: 2px 6px;
+}
+/* Configurações > Conta. */
+.account-sections {
+  display: grid;
+  gap: 34px;
+}
+.password-form {
+  display: grid;
+  gap: 14px;
+  max-width: 520px;
+}
+.password-form h2 {
+  margin: 0;
+}
+.password-form p {
+  margin: 0;
+}
+.password-form button {
+  justify-self: start;
+}
+.account-sections .danger-zone {
+  border-top: 1px solid var(--line);
+  padding-top: 26px;
+}

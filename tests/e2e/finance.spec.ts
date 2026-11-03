@@ -70,7 +70,7 @@ test('cofrinho atinge meta, registra resgate e devolve saldo na exclusão', asyn
   await flash(page, 'guardado(s) em "Viagem"');
   await expect(page.getByText('🎉 Meta atingida')).toBeVisible();
   await expect(page.locator('.goal-banner')).toContainText('Meta do cofrinho "Viagem" atingida!');
-  await page.getByRole('button', { name: 'Fechar aviso' }).click();
+  await page.getByRole('button', { name: 'Fechar aviso', exact: true }).click();
   await page.reload();
   await expect(page.locator('.goal-banner')).toHaveCount(0);
   await page.getByRole('link', { name: 'Resgatar', exact: true }).click();
@@ -134,7 +134,7 @@ test('logout protege dados e permite novo login', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Entrar', exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByRole('button', { name: 'Continuar com Google', exact: true })).toBeVisible();
-  await page.getByLabel('Usuário', { exact: true }).fill(username);
+  await page.getByLabel('Usuário ou e-mail', { exact: true }).fill(username);
   await page.getByLabel('Senha', { exact: true }).fill('senha-de-teste-forte');
   await page.getByRole('button', { name: 'Entrar', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Olá, Pessoa de teste', exact: true })).toBeVisible();

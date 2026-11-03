@@ -47,6 +47,9 @@ export default defineConfig({
           APP_URL: 'http://127.0.0.1:3100',
           ANTHROPIC_API_KEY: '',
           MERCADOPAGO_ACCESS_TOKEN: '',
+          // Never send real e-mails from tests, even if the local .env has SMTP settings.
+          SMTP_URL: '',
+          EMAIL_FROM: '',
         },
         reuseExistingServer: false,
         timeout: 60000,

@@ -13,6 +13,9 @@ model User {
   passwordHash String?
   googleId String? @unique
   email String?
+  /// When the person proved the e-mail is theirs (link sent by e-mail, or Google already verified it).
+  emailVerifiedAt DateTime?
+  emailTokens EmailToken[]
   // Paid plan: "mensal", "anual" or "vitalicio". planExpiresAt is null for lifetime access.
   plan String?
   planExpiresAt DateTime?
@@ -244,4 +247,19 @@ model AiMessage {
   createdAt DateTime @default(now())
 
   @@index([conversationId, createdAt])
+}
+
+/// Single-use links sent by e-mail: confirm the address ("verify") or choose a new password ("reset").
+/// Only the SHA-256 of the token is stored, like sessions.
+model EmailToken {
+  id String @id @default(uuid())
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind String
+  tokenHash String @unique
+  expiresAt DateTime
+  usedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, kind, createdAt])
 }

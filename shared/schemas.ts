@@ -14,17 +14,18 @@ const color = z
   .default('#f64301');
 const icon = z.string().max(20).default('💰');
 const reference = z.string().min(1).max(100).nullable().optional();
-export const credentials = z
-  .object({
-    username: z
-      .string()
-      .trim()
-      .min(3)
-      .max(60)
-      .regex(/^[\p{L}\p{N}_.@+-]+$/u),
-    password: z.string().min(10).max(128),
-  })
-  .strict();
+/**
+ * Letters, digits and _ . + - only. No "@": the login field also accepts e-mails, so a username shaped like
+ * someone else's e-mail could take over that person's e-mail login.
+ */
+export const username = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .min(3, 'O usuário precisa ter pelo menos 3 caracteres.')
+  .max(60, 'O usuário pode ter no máximo 60 caracteres.')
+  .regex(/^[\p{L}\p{N}_.+-]+$/u, 'Use só letras, números e . _ - + (sem espaços nem @).');
+export const credentials = z.object({ username, password: z.string().min(10).max(128) }).strict();
 export const registration = credentials.extend({
   name: name.optional(),
   email: z.string().trim().toLowerCase().email('Informe um e-mail válido.').max(254),

@@ -9,6 +9,8 @@ export interface User {
   access?: Access;
   isAdmin?: boolean;
   hasPassword?: boolean;
+  emailVerified?: boolean;
+  needsUsername?: boolean;
 }
 export interface Named {
   id: string;

@@ -38,5 +38,6 @@ export default tseslint.config(
   },
   { files: ['scripts/**/*.ts', 'tests/**/*.ts'], rules: { 'no-console': 'off' } },
   { files: ['**/*.cjs'], languageOptions: { sourceType: 'commonjs', globals: { ...globals.node } } },
+  { files: ['**/*.mjs'], languageOptions: { globals: { ...globals.node } } },
   prettier,
 );

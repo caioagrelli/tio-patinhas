@@ -6,6 +6,7 @@ import { createDefaults, hashPassword, tokenHash } from '../../server/src/auth';
 import { FinanceService } from '../../server/src/finance';
 import { CrabAiService } from '../../server/src/crab-ai';
 import { Database } from '../../server/src/database';
+import { Mailer } from '../../server/src/mail';
 import { today, addMonths } from '../../server/src/domain';
 import { testDatabase } from '../database';
 import { createHmac } from 'node:crypto';
@@ -139,6 +140,7 @@ describe('API com PostgreSQL real', () => {
     });
     it('primeiro login cria carteira e cadastros padrão; segundo reaproveita a conta', async () => {
       const sub = 'google-' + randomUUID();
+      const mail = jest.spyOn(app.get(Mailer), 'send').mockResolvedValue(true);
       const first = await finish(await start(), { sub });
       expect(first.headers.location).toBe('/');
       const session = (first.headers['set-cookie'] as unknown as string[]).find(c => c.startsWith('session='))!;
@@ -157,7 +159,48 @@ describe('API com PostgreSQL real', () => {
       expect(tokenRequest.get('code_verifier')).toBeTruthy();
       await finish(await start(), { sub, email: 'novo@example.com' });
       expect(await db.user.count({ where: { googleId: sub } })).toBe(1);
-      expect((await db.user.findUniqueOrThrow({ where: { googleId: sub } })).email).toBe('novo@example.com');
+      const google = await db.user.findUniqueOrThrow({ where: { googleId: sub } });
+      expect(google.email).toBe('novo@example.com');
+      // Google already verified the address: one welcome e-mail on the first login, no confirmation link.
+      expect(google.emailVerifiedAt).not.toBeNull();
+      expect(mail).toHaveBeenCalledTimes(1);
+      expect(mail.mock.calls[0][0]).toMatchObject({ subject: expect.stringContaining('Bem-vindo') });
+      expect(mail.mock.calls[0][0].text).not.toContain('verify-email');
+      mail.mockRestore();
+    });
+    it('cadastro pelo Google pede o nome de usuário uma única vez', async () => {
+      const sub = 'google-' + randomUUID();
+      const mail = jest.spyOn(app.get(Mailer), 'send').mockResolvedValue(true);
+      const first = await finish(await start(), { sub });
+      mail.mockRestore();
+      const session = (first.headers['set-cookie'] as unknown as string[])
+        .find(c => c.startsWith('session='))!
+        .split(';')[0];
+      const me = actor(session);
+      expect((await me.get('/auth/me').expect(200)).body).toMatchObject({ needsUsername: true });
+      expect(
+        (await me.post('/auth/username').send({ username: 'fulano@gmail.com' }).expect(400)).body.message,
+      ).toContain('sem espaços nem @');
+      await me.post('/auth/username').send({ username: 'ab' }).expect(400);
+      const taken = 'ocupado' + randomUUID().slice(0, 6);
+      await db.user.create({ data: { username: taken, name: 'Outro' } });
+      expect(
+        (await me.post('/auth/username').send({ username: taken.toUpperCase() }).expect(400)).body.message,
+      ).toContain('já existe');
+      const chosen = 'pessoa.google' + randomUUID().slice(0, 6);
+      expect(
+        (
+          await me
+            .post('/auth/username')
+            .send({ username: ' ' + chosen.toUpperCase() + ' ' })
+            .expect(201)
+        ).body,
+      ).toEqual({ username: chosen });
+      expect((await me.get('/auth/me').expect(200)).body).toMatchObject({ username: chosen, needsUsername: false });
+      await me
+        .post('/auth/username')
+        .send({ username: chosen + 'x' })
+        .expect(400);
     });
     it('recusa state trocado, nonce errado, e-mail não verificado e cancelamento', async () => {
       const flow = await start();
@@ -227,6 +270,11 @@ describe('API com PostgreSQL real', () => {
           .expect(400)
       ).body.message,
     ).toBe('Este e-mail já está cadastrado.');
+    // A username shaped like an e-mail could hijack that e-mail's login.
+    await actor('')
+      .post('/auth/register')
+      .send({ username: 'alguem@example.com', email: 'x' + username + '@example.com', password: 'senha-de-teste' })
+      .expect(400);
     await actor('')
       .post('/auth/register')
       .send({ username: 'x' + randomUUID(), password: 'senha-de-teste' })

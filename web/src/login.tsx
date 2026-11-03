@@ -118,10 +118,17 @@ const loginErrors: Record<string, string> = {
   email: 'Sua conta Google precisa ter o e-mail verificado.',
   inativo: 'Esta conta está desativada.',
   indisponivel: 'O login com Google não está configurado neste servidor.',
+  link: 'Este link expirou ou já foi usado. Entre na sua conta e peça um novo.',
 };
 export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
   const [error, setError] = useState(() => loginErrors[new URLSearchParams(location.search).get('erro') ?? ''] ?? '');
-  const [deleted] = useState(() => new URLSearchParams(location.search).get('conta') === 'excluida');
+  const [notice, setNotice] = useState(() => {
+    const query = new URLSearchParams(location.search);
+    if (query.get('conta') === 'excluida') return 'Sua conta e seus dados foram excluídos.';
+    if (query.get('email') === 'confirmado') return 'E-mail confirmado! Entre na sua conta.';
+    return '';
+  });
+  const [forgot, setForgot] = useState(false);
   const [register, setRegister] = useState(false),
     [busy, setBusy] = useState(false);
   const [config, setConfig] = useState<{ google: boolean; turnstileSiteKey: string | null } | null>(null),
@@ -174,6 +181,28 @@ export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
     }
     setBusy(true);
     const f = new FormData(e.currentTarget);
+    if (forgot) {
+      try {
+        await api(
+          '/auth/password/forgot',
+          'POST',
+          { email: text(f, 'email') },
+          undefined,
+          captcha ? { 'X-Turnstile-Token': captcha } : {},
+        );
+        setNotice(
+          'Se existir uma conta com esse e-mail, enviamos um link para criar uma nova senha. Confira também o spam.',
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Não foi possível enviar o e-mail.');
+      }
+      if (widgetId.current) {
+        turnstile.current?.reset(widgetId.current);
+        setCaptcha('');
+      }
+      setBusy(false);
+      return;
+    }
     try {
       onLogin(
         await api<User>(
@@ -207,6 +236,12 @@ export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
     location.assign('/api/auth/google' + (captcha ? '?captcha=' + encodeURIComponent(captcha) : ''));
   }
   const waiting = busy || (!!siteKey && !captcha);
+  function switchTo(mode: 'login' | 'register' | 'forgot') {
+    setRegister(mode === 'register');
+    setForgot(mode === 'forgot');
+    setError('');
+    setNotice('');
+  }
   return (
     <div className={'auth-page' + (register ? ' registering' : '')}>
       <ParticleField />
@@ -231,15 +266,16 @@ export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
         </section>
         <section className="auth-card">
           <p className="eyebrow">BEM-VINDO AO SEU CONTROLE FINANCEIRO</p>
-          <h2>{register ? 'Crie sua conta' : 'Bom te ver por aqui\u00a0 ;)'}</h2>
+          <h2>{forgot ? 'Esqueceu a senha?' : register ? 'Crie sua conta' : 'Bom te ver por aqui\u00a0 ;)'}</h2>
           {register && <p className="muted">Comece a cuidar dos seus próximos planos.</p>}
+          {forgot && <p className="muted">Informe o e-mail da conta e enviaremos um link para criar uma nova senha.</p>}
           <form onSubmit={submit} className="form-grid">
             {register && (
               <Field label="Seu nome">
                 <input name="name" required maxLength={80} autoComplete="name" />
               </Field>
             )}
-            {register && (
+            {(register || forgot) && (
               <Field label="E-mail">
                 <input
                   name="email"
@@ -253,31 +289,40 @@ export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
                 />
               </Field>
             )}
-            <Field label="Usuário">
-              <input
-                name="username"
-                required
-                minLength={3}
-                maxLength={60}
-                autoComplete="username"
-                autoCapitalize="none"
-              />
-            </Field>
-            <Field label="Senha">
-              <input
-                name="password"
-                type="password"
-                required
-                minLength={register ? 10 : 1}
-                maxLength={128}
-                autoComplete={register ? 'new-password' : 'current-password'}
-              />
-            </Field>
+            {!forgot && (
+              <Field label={register ? 'Usuário' : 'Usuário ou e-mail'}>
+                <input
+                  name="username"
+                  required
+                  minLength={register ? 3 : 1}
+                  maxLength={register ? 60 : 254}
+                  autoComplete="username"
+                  autoCapitalize="none"
+                />
+              </Field>
+            )}
+            {!forgot && (
+              <Field label="Senha">
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  minLength={register ? 10 : 1}
+                  maxLength={128}
+                  autoComplete={register ? 'new-password' : 'current-password'}
+                />
+              </Field>
+            )}
+            {!forgot && !register && (
+              <button type="button" className="link forgot-link" onClick={() => switchTo('forgot')}>
+                Esqueci minha senha
+              </button>
+            )}
             {register && <small className="muted">Use pelo menos 10 caracteres.</small>}
             {siteKey && <div ref={widget} />}
-            {deleted && !error && (
+            {notice && !error && (
               <p className="notice" role="status">
-                Sua conta e seus dados foram excluídos.
+                {notice}
               </p>
             )}
             {error && (
@@ -285,8 +330,10 @@ export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
                 {error}
               </p>
             )}
-            <button disabled={waiting}>{busy ? 'Aguarde…' : register ? 'Criar conta' : 'Entrar'}</button>
-            {config?.google && (
+            <button disabled={waiting}>
+              {busy ? 'Aguarde…' : forgot ? 'Enviar link' : register ? 'Criar conta' : 'Entrar'}
+            </button>
+            {config?.google && !forgot && (
               <>
                 <div className="divider">
                   <span>ou</span>
@@ -316,21 +363,162 @@ export function Auth({ onLogin }: { onLogin: (user: User) => void }) {
             )}
           </form>
           <p className="auth-switch">
-            {register ? 'Já tem uma conta?' : 'Primeira vez por aqui?'}{' '}
-            <button
-              className="link"
-              onClick={() => {
-                setRegister(!register);
-                setError('');
-              }}
-            >
-              {register ? 'Entrar na conta' : 'Criar uma conta'}
+            {forgot || register ? 'Já tem uma conta?' : 'Primeira vez por aqui?'}{' '}
+            <button className="link" onClick={() => switchTo(forgot || register ? 'login' : 'register')}>
+              {forgot || register ? 'Entrar na conta' : 'Criar uma conta'}
             </button>
           </p>
         </section>
       </main>
       <CrabCredit />
       <PixelCrab />
+    </div>
+  );
+}
+
+/** Opened from the reset e-mail (#/redefinir-senha?token=…). On success the server starts a session. */
+export function ResetPassword({ token }: { token: string | null }) {
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    if (text(f, 'password') !== text(f, 'confirm')) {
+      setError('As duas senhas não são iguais.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api('/auth/password/reset', 'POST', { token, password: text(f, 'password') });
+      location.assign('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível trocar a senha.');
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="auth-page">
+      <ParticleField />
+      <main className="auth-shell single">
+        <section className="auth-card">
+          <a className="brand" href="/">
+            <img src="/logo.png" alt="" />
+            CRAB FINANCE<span className="cursor">_</span>
+          </a>
+          <h1 className="auth-title">Escolha uma nova senha</h1>
+          <p className="muted">Ela passa a valer na hora para entrar com seu usuário ou e-mail.</p>
+          {!token ? (
+            <p className="error" role="alert">
+              Link incompleto. Abra o link do e-mail de novo ou peça outro em "Esqueci minha senha".
+            </p>
+          ) : (
+            <form onSubmit={submit} className="form-grid">
+              <Field label="Nova senha">
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  minLength={10}
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+              </Field>
+              <Field label="Repita a nova senha">
+                <input
+                  name="confirm"
+                  type="password"
+                  required
+                  minLength={10}
+                  maxLength={128}
+                  autoComplete="new-password"
+                />
+              </Field>
+              <small className="muted">Use pelo menos 10 caracteres. Você vai entrar na conta logo em seguida.</small>
+              {error && (
+                <p className="error" role="alert">
+                  {error}
+                </p>
+              )}
+              <button disabled={busy}>{busy ? 'Aguarde…' : 'Salvar nova senha'}</button>
+            </form>
+          )}
+          <p className="auth-switch">
+            <a className="link" href="/">
+              Voltar ao login
+            </a>
+          </p>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/** Suggests a username from the e-mail's local part, keeping only the allowed characters. */
+const suggestUsername = (email?: string | null) =>
+  (email ?? '')
+    .split('@')[0]
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9_.+-]/g, '')
+    .slice(0, 60);
+
+/** First Google sign-in: the account exists, but the person still picks the username used to log in. */
+export function ChooseUsername({ user, onDone }: { user: User; onDone: (username: string) => void }) {
+  const [value, setValue] = useState(() => suggestUsername(user.email));
+  const [error, setError] = useState(''),
+    [busy, setBusy] = useState(false);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const result = await api<{ username: string }>('/auth/username', 'POST', { username: value });
+      onDone(result.username);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Não foi possível salvar.');
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="auth-page">
+      <ParticleField />
+      <main className="auth-shell single">
+        <section className="auth-card">
+          <a className="brand" href="/">
+            <img src="/logo.png" alt="" />
+            CRAB FINANCE<span className="cursor">_</span>
+          </a>
+          <h1 className="auth-title">Escolha seu nome de usuário</h1>
+          <p className="muted">
+            Olá, {user.name.split(' ')[0]}! Falta só isso. Você continua entrando com o Google; o usuário é como você
+            aparece no CRAB FINANCE.
+          </p>
+          <form onSubmit={submit} className="form-grid">
+            <Field label="Nome de usuário">
+              <input
+                name="username"
+                required
+                minLength={3}
+                maxLength={60}
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={value}
+                onChange={e => setValue(e.target.value)}
+              />
+            </Field>
+            <small className="muted">Letras, números e . _ - + (sem espaços nem @).</small>
+            {error && (
+              <p className="error" role="alert">
+                {error}
+              </p>
+            )}
+            <button disabled={busy || value.trim().length < 3}>{busy ? 'Salvando…' : 'Continuar'}</button>
+          </form>
+        </section>
+      </main>
     </div>
   );
 }

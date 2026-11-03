@@ -1,7 +1,7 @@
 import { StrictMode, useCallback, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { api, ApiError } from './api';
-import { Auth } from './login';
+import { Auth, ChooseUsername, ResetPassword } from './login';
 import type { Catalog, Dashboard, User } from './types';
 import { planName } from '../../shared/plans';
 import { App, parseRoute, href, useData, useApp, type Flash, type Route } from './ui';
@@ -116,6 +116,60 @@ function Page({ route }: { route: Route }) {
 }
 
 /** Top banner when a savings box reached its goal (Django's alerta_topo). */
+/** Until the e-mail is confirmed, a discreet reminder with a button to send the link again. */
+function EmailBanner({ user }: { user: User }) {
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | 'hidden'>(() =>
+    sessionStorage.getItem('email-banner') === 'hidden' ? 'hidden' : 'idle',
+  );
+  const [error, setError] = useState('');
+  if (!user.email || user.emailVerified !== false || state === 'hidden') return null;
+  async function resend() {
+    setState('sending');
+    setError('');
+    try {
+      await api('/auth/verify-email/resend', 'POST');
+      setState('sent');
+    } catch (err) {
+      setError((err as Error).message);
+      setState('idle');
+    }
+  }
+  return (
+    <div className="flash warning email-banner" role="status">
+      <span>
+        {state === 'sent' ? (
+          <>
+            Enviamos um novo link para <strong>{user.email}</strong>. Confira também o spam.
+          </>
+        ) : (
+          <>
+            Confirme seu e-mail <strong>{user.email}</strong> pelo link que enviamos.
+          </>
+        )}
+        {error && <> {error}</>}
+      </span>
+      <span className="email-banner-actions">
+        {state !== 'sent' && (
+          <button type="button" className="link" disabled={state === 'sending'} onClick={() => void resend()}>
+            {state === 'sending' ? 'Enviando…' : 'Reenviar e-mail'}
+          </button>
+        )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Fechar aviso de e-mail"
+          onClick={() => {
+            sessionStorage.setItem('email-banner', 'hidden');
+            setState('hidden');
+          }}
+        >
+          ✕
+        </button>
+      </span>
+    </div>
+  );
+}
+
 function GoalBanner() {
   const { route } = useApp();
   const { data } = useData<Dashboard>('/dashboard', route);
@@ -147,7 +201,12 @@ function Root() {
     localStorage.getItem('theme') === 'light' ? 'light' : 'dark',
   );
   const [route, setRoute] = useState<Route>(() => parseRoute());
-  const [flash, setFlash] = useState<Flash[]>([]),
+  // The confirmation link from the e-mail lands on /?email=confirmado.
+  const [flash, setFlash] = useState<Flash[]>(() =>
+      new URLSearchParams(location.search).get('email') === 'confirmado'
+        ? [{ kind: 'success', text: 'E-mail confirmado! Obrigado.' }]
+        : [],
+    ),
     keepFlash = useRef(false);
   const [catalog, setCatalog] = useState<Catalog | null>(null),
     [catalogVersion, setCatalogVersion] = useState(0);
@@ -183,6 +242,10 @@ function Root() {
       .then(setCatalog)
       .catch(() => {});
   }, [user, catalogVersion]);
+  // After a logged-in landing from an e-mail link, drop ?email=… from the address bar.
+  useEffect(() => {
+    if (user && location.search) history.replaceState(null, '', location.pathname + location.hash);
+  }, [user]);
   const unauthorized = useCallback(() => {
     setUser(null);
     setCatalog(null);
@@ -219,6 +282,8 @@ function Root() {
         Abrindo sua carteira…
       </main>
     );
+  // Opened from the password e-mail; works logged in or out.
+  if (route.path[0] === 'redefinir-senha') return <ResetPassword token={route.query.get('token')} />;
   // The plans and checkout pages are public and have their own layout.
   if (route.path[0] === 'planos')
     return route.path[1] === 'checkout' ? (
@@ -240,6 +305,11 @@ function Root() {
           void api<User>('/auth/me').then(setUser);
         }}
       />
+    );
+  // Google sign-ups pick their username before anything else.
+  if (user.needsUsername)
+    return (
+      <ChooseUsername user={user} onDone={username => setUser(u => u && { ...u, username, needsUsername: false })} />
     );
   // Trial over and no paid plan: only the plans page is available.
   if (user.access?.status === 'expirado' && !user.isAdmin) return <PlansPage user={user} />;
@@ -363,6 +433,7 @@ function Root() {
         </main>
       ) : (
         <main className="container">
+          <EmailBanner user={user} />
           {flash.length > 0 && (
             <div className="flash-list">
               {flash.map((m, i) => (

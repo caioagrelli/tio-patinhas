@@ -35,6 +35,8 @@ import { BillingService, PaidGuard } from './billing';
 import { AdminGuard, AdminService } from './admin';
 import { CrabAiService, crabAiEnabled } from './crab-ai';
 import { AccountService } from './account';
+import { EmailAccountService } from './email-account';
+import { Mailer } from './mail';
 @Controller('api/auth')
 class AuthController {
   constructor(
@@ -43,13 +45,53 @@ class AuthController {
     @Inject(Database) private readonly db: Database,
     @Inject(BillingService) private readonly billing: BillingService,
     @Inject(AccountService) private readonly account: AccountService,
+    @Inject(EmailAccountService) private readonly emailAccount: EmailAccountService,
   ) {}
   @Post('register')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   async register(@Req() req: Request, @Body() body: unknown, @Res({ passthrough: true }) res: Response) {
     const input = parse(registration, body);
     await verifyTurnstile(req.headers['x-turnstile-token']);
-    return this.auth.register(input, res);
+    const user = await this.auth.register(input, res);
+    await this.emailAccount.welcome({ id: user.id, name: user.name, email: input.email });
+    return user;
+  }
+  @Get('verify-email')
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  async verifyEmail(@Query('token') token: unknown, @Res() res: Response) {
+    res.redirect(await this.emailAccount.confirm(token));
+  }
+  @Post('verify-email/resend')
+  @UseGuards(AuthGuard)
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  resendConfirmation(@Req() req: AuthRequest) {
+    return this.emailAccount.resendConfirmation(req.userId);
+  }
+  @Post('password/forgot')
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  async forgotPassword(@Req() req: Request, @Body() body: unknown) {
+    await verifyTurnstile(req.headers['x-turnstile-token']);
+    return this.emailAccount.forgot(body);
+  }
+  @Post('password/reset')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  async resetPassword(@Body() body: unknown, @Res({ passthrough: true }) res: Response) {
+    const userId = await this.emailAccount.reset(body);
+    // The new password works right away: the person lands logged in.
+    await this.auth.session(userId, res);
+    return { ok: true };
+  }
+  @Post('username')
+  @UseGuards(AuthGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  chooseUsername(@Req() req: AuthRequest, @Body() body: unknown) {
+    return this.auth.chooseUsername(req.userId, body);
+  }
+  @Post('password')
+  @UseGuards(AuthGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  changePassword(@Req() req: AuthRequest, @Body() body: unknown) {
+    return this.emailAccount.change(req.userId, String(req.cookies.session), body);
   }
   @Post('login')
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
@@ -99,11 +141,27 @@ class AuthController {
   async me(@Req() req: AuthRequest) {
     const user = await this.db.user.findUniqueOrThrow({
       where: { id: req.userId },
-      select: { id: true, username: true, name: true, email: true, createdAt: true, isAdmin: true, passwordHash: true },
+      select: {
+        id: true,
+        username: true,
+        name: true,
+        email: true,
+        emailVerifiedAt: true,
+        createdAt: true,
+        isAdmin: true,
+        passwordHash: true,
+      },
     });
-    const { passwordHash, ...profile } = user;
+    const { passwordHash, emailVerifiedAt, ...profile } = user;
     // Only whether a password exists (Google-only accounts have none), never the hash itself.
-    return { ...profile, hasPassword: passwordHash !== null, access: await this.billing.access(req.userId) };
+    return {
+      ...profile,
+      hasPassword: passwordHash !== null,
+      // Google sign-ups still on the placeholder username are asked to pick one.
+      needsUsername: profile.username.startsWith('google:'),
+      emailVerified: emailVerifiedAt !== null,
+      access: await this.billing.access(req.userId),
+    };
   }
 }
 @Controller('api/admin')
@@ -325,6 +383,8 @@ class HealthController {
     Database,
     AuthService,
     AccountService,
+    EmailAccountService,
+    Mailer,
     GoogleAuth,
     CrabAiService,
     BillingService,

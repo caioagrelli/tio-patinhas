@@ -62,3 +62,62 @@ export function DeleteAccount({ user }: { user: User }) {
     </form>
   );
 }
+
+/** Change the password (or create one, for accounts that only used Google). Other sessions are closed. */
+export function ChangePassword({ user }: { user: User }) {
+  const [busy, setBusy] = useState(false),
+    [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const form = e.currentTarget,
+      data = new FormData(form);
+    const value = (name: string) => String(data.get(name) ?? '');
+    if (value('password') !== value('confirm')) {
+      setMessage({ ok: false, text: 'As duas senhas novas não são iguais.' });
+      return;
+    }
+    setBusy(true);
+    setMessage(null);
+    try {
+      await api('/auth/password', 'POST', {
+        ...(user.hasPassword ? { current: value('current') } : {}),
+        password: value('password'),
+      });
+      form.reset();
+      setMessage({
+        ok: true,
+        text: user.hasPassword
+          ? 'Senha alterada. As outras sessões foram encerradas.'
+          : 'Senha criada. Agora você também pode entrar com seu e-mail e essa senha.',
+      });
+    } catch (err) {
+      setMessage({ ok: false, text: (err as Error).message });
+    }
+    setBusy(false);
+  }
+  return (
+    <form className="password-form" onSubmit={submit}>
+      <h2>{user.hasPassword ? 'Trocar senha' : 'Criar uma senha'}</h2>
+      {!user.hasPassword && (
+        <p className="muted">Você entra com o Google. Se quiser, crie uma senha para entrar também com seu e-mail.</p>
+      )}
+      {user.hasPassword && (
+        <Field label="Senha atual">
+          <input name="current" type="password" required autoComplete="current-password" />
+        </Field>
+      )}
+      <Field label="Nova senha">
+        <input name="password" type="password" required minLength={10} maxLength={128} autoComplete="new-password" />
+      </Field>
+      <Field label="Repita a nova senha">
+        <input name="confirm" type="password" required minLength={10} maxLength={128} autoComplete="new-password" />
+      </Field>
+      {message && (
+        <p className={message.ok ? 'notice' : 'error'} role={message.ok ? 'status' : 'alert'}>
+          {message.text}
+        </p>
+      )}
+      <button disabled={busy}>{busy ? 'Salvando…' : user.hasPassword ? 'Trocar senha' : 'Criar senha'}</button>
+    </form>
+  );
+}
